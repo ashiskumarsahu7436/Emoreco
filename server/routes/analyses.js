@@ -118,11 +118,11 @@ router.delete('/', authenticateToken, (req, res) => {
         deletedCount: result.changes
       })
     } else {
-      const result = db.prepare('DELETE FROM analyses WHERE user_id = ? AND space_id IS NULL')
+      const result = db.prepare('DELETE FROM analyses WHERE user_id = ?')
         .run(req.user.userId)
       
       res.json({ 
-        message: 'All general history cleared successfully',
+        message: 'All history cleared successfully',
         deletedCount: result.changes
       })
     }
