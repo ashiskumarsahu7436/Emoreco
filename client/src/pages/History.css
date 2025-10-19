@@ -5,13 +5,42 @@
 }
 
 .history-header {
-  text-align: center;
   margin-bottom: 50px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.header-content > div {
+  text-align: center;
+  flex: 1;
 }
 
 .history-header h1 {
   font-size: 3rem;
   margin-bottom: 15px;
+}
+
+.clear-all-btn {
+  padding: 12px 24px;
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff4540;
+  border: 1px solid #ff4540;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.clear-all-btn:hover {
+  background: #ff4540;
+  color: white;
+  transform: translateY(-2px);
 }
 
 .loading {
@@ -96,6 +125,28 @@
   opacity: 0.8;
 }
 
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.delete-item-btn {
+  padding: 8px 12px;
+  background: rgba(255, 69, 58, 0.1);
+  color: #ff4540;
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.delete-item-btn:hover {
+  background: #ff4540;
+  color: white;
+  transform: scale(1.1);
+}
+
 .view-btn {
   padding: 10px 20px;
   background: var(--primary);
@@ -117,6 +168,15 @@
     font-size: 2rem;
   }
 
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .clear-all-btn {
+    width: 100%;
+  }
+
   .item-header {
     flex-direction: column;
     align-items: flex-start;
@@ -126,5 +186,10 @@
   .item-footer {
     flex-direction: column;
     gap: 15px;
+  }
+
+  .item-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }

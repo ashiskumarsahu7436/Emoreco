@@ -38,6 +38,42 @@ function History() {
     }
   }
 
+  const deleteAnalysis = async (e, analysisId) => {
+    e.stopPropagation()
+    
+    if (!confirm('Are you sure you want to delete this analysis?')) return
+
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`/api/analyses/${analysisId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      fetchHistory()
+    } catch (err) {
+      alert('Failed to delete analysis')
+    }
+  }
+
+  const clearAllHistory = async () => {
+    const message = spaceId 
+      ? 'Are you sure you want to clear all history in this space?' 
+      : 'Are you sure you want to clear all general history?'
+    
+    if (!confirm(message)) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const url = spaceId ? `/api/analyses?spaceId=${spaceId}` : '/api/analyses'
+      
+      await axios.delete(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      fetchHistory()
+    } catch (err) {
+      alert('Failed to clear history')
+    }
+  }
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', { 
@@ -52,10 +88,19 @@ function History() {
   return (
     <div className="history-page">
       <div className="history-header">
-        <h1>{spaceId ? 'Space History' : 'Recent Analyses'}</h1>
-        <p className="subtitle">
-          {spaceId ? 'All analyses in this space' : 'Your last 50 analyses'}
-        </p>
+        <div className="header-content">
+          <div>
+            <h1>{spaceId ? 'Space History' : 'Recent Analyses'}</h1>
+            <p className="subtitle">
+              {spaceId ? 'All analyses in this space' : 'Your last 50 analyses'}
+            </p>
+          </div>
+          {analyses.length > 0 && (
+            <button className="clear-all-btn" onClick={clearAllHistory}>
+              <i className="fas fa-trash-alt"></i> Clear All History
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -90,9 +135,17 @@ function History() {
                 <span className="language">
                   <i className="fas fa-language"></i> {analysis.language || 'English'}
                 </span>
-                <button className="view-btn">
-                  View Details <i className="fas fa-arrow-right"></i>
-                </button>
+                <div className="item-actions">
+                  <button 
+                    className="delete-item-btn" 
+                    onClick={(e) => deleteAnalysis(e, analysis.id)}
+                  >
+                    <i className="fas fa-trash"></i>
+                  </button>
+                  <button className="view-btn">
+                    View Details <i className="fas fa-arrow-right"></i>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

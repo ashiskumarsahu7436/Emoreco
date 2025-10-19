@@ -81,4 +81,55 @@ router.post('/:id/chat', authenticateToken, chatWithAI)
 
 router.get('/:id/pdf', authenticateToken, generatePDF)
 
+router.delete('/:id', authenticateToken, (req, res) => {
+  try {
+    const analysis = db.prepare('SELECT * FROM analyses WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user.userId)
+
+    if (!analysis) {
+      return res.status(404).json({ error: 'Analysis not found' })
+    }
+
+    db.prepare('DELETE FROM analyses WHERE id = ?').run(req.params.id)
+    res.json({ message: 'Analysis deleted successfully' })
+  } catch (err) {
+    console.error('Delete analysis error:', err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/', authenticateToken, (req, res) => {
+  try {
+    const { spaceId } = req.query
+
+    if (spaceId) {
+      const space = db.prepare('SELECT * FROM spaces WHERE id = ? AND user_id = ?')
+        .get(spaceId, req.user.userId)
+
+      if (!space) {
+        return res.status(404).json({ error: 'Space not found' })
+      }
+
+      const result = db.prepare('DELETE FROM analyses WHERE space_id = ? AND user_id = ?')
+        .run(spaceId, req.user.userId)
+      
+      res.json({ 
+        message: 'Space history cleared successfully',
+        deletedCount: result.changes
+      })
+    } else {
+      const result = db.prepare('DELETE FROM analyses WHERE user_id = ? AND space_id IS NULL')
+        .run(req.user.userId)
+      
+      res.json({ 
+        message: 'All general history cleared successfully',
+        deletedCount: result.changes
+      })
+    }
+  } catch (err) {
+    console.error('Clear history error:', err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 export default router
