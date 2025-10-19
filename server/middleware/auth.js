@@ -9,7 +9,7 @@ export const authenticateToken = (req, res, next) => {
   }
 
   try {
-    const user = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key')
+    const user = jwt.verify(token, process.env.JWT_SECRET)
     req.user = user
     next()
   } catch (err) {

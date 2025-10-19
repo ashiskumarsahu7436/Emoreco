@@ -26,7 +26,7 @@ router.post('/signup', async (req, res) => {
 
     const token = jwt.sign(
       { userId: result.lastInsertRowid, email },
-      process.env.JWT_SECRET || 'default-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '30d' }
     )
 
@@ -64,7 +64,7 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'default-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '30d' }
     )
 

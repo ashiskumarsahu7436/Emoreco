@@ -101,7 +101,7 @@ function Dashboard() {
       }
 
       const token = localStorage.getItem('token')
-      const response = await axios.post('/api/analyze', formData, {
+      const response = await axios.post('/api/analyses', formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
