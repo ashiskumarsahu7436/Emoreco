@@ -1,0 +1,11 @@
+.footer {
+  text-align: center;
+  padding: 30px;
+  margin-top: auto;
+  background-color: rgba(26, 26, 64, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.footer p {
+  opacity: 0.8;
+}

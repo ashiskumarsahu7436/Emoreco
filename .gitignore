@@ -4,3 +4,9 @@
 node_modules/
 .env
 .DS_Store
+dist/
+build/
+*.lock
+package-lock.json
+uploads/
+.vite/

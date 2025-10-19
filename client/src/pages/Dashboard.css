@@ -1,0 +1,226 @@
+.dashboard {
+  width: 100%;
+  min-height: 80vh;
+}
+
+.hero-section {
+  text-align: center;
+  padding: 60px 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.hero-section h1 {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.action-cards {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 60px 0;
+  flex-wrap: wrap;
+}
+
+.action-card {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 40px 30px;
+  width: 300px;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.action-card:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-10px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+}
+
+.action-icon {
+  font-size: 60px;
+  margin-bottom: 20px;
+  color: var(--secondary);
+}
+
+.action-card h3 {
+  font-size: 1.8rem;
+  margin-bottom: 15px;
+}
+
+.action-button {
+  padding: 12px 30px;
+  background: var(--primary);
+  color: var(--light);
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  margin-top: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.action-button:hover {
+  background: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(54, 209, 220, 0.4);
+}
+
+.modal {
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: linear-gradient(135deg, #1A1A40 0%, #3F3FBF 100%);
+  border-radius: 20px;
+  padding: 40px;
+  width: 500px;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 30px;
+  cursor: pointer;
+  color: var(--light);
+  transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+  color: var(--secondary);
+}
+
+.space-selector {
+  margin: 25px 0;
+  text-align: left;
+}
+
+.space-selector label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.space-selector select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--light);
+  font-size: 1rem;
+}
+
+.space-selector select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.recording-section, .upload-section {
+  margin-top: 30px;
+}
+
+.recording-indicator {
+  margin: 30px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.pulse-dot {
+  width: 15px;
+  height: 15px;
+  background: var(--secondary);
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.record-btn, .stop-btn, .upload-btn, .analyze-btn {
+  padding: 15px 30px;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 10px;
+}
+
+.record-btn {
+  background: var(--primary);
+  color: var(--light);
+}
+
+.stop-btn {
+  background: var(--secondary);
+  color: var(--light);
+}
+
+.upload-btn {
+  background: var(--accent);
+  color: var(--dark);
+  display: inline-block;
+  cursor: pointer;
+}
+
+.analyze-btn {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: var(--light);
+}
+
+.record-btn:hover, .stop-btn:hover, .upload-btn:hover, .analyze-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(108, 99, 255, 0.4);
+}
+
+.analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-info {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+  .hero-section h1 {
+    font-size: 2rem;
+  }
+
+  .action-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 30px 20px;
+  }
+}

@@ -1,0 +1,133 @@
+.home {
+  width: 100%;
+}
+
+.hero {
+  text-align: center;
+  padding: 80px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 3.5rem;
+  margin-bottom: 20px;
+  background: linear-gradient(to right, var(--accent), var(--primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 1.5rem;
+  margin-bottom: 40px;
+  opacity: 0.9;
+}
+
+.features {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin: 40px 0;
+  flex-wrap: wrap;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 30px;
+  width: 250px;
+  text-align: center;
+  transition: transform 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+  font-size: 40px;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.feature-title {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+.cta-section {
+  margin: 60px 0 40px;
+}
+
+.cta-button {
+  padding: 18px 40px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: var(--light);
+  border: none;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 20px rgba(108, 99, 255, 0.4);
+}
+
+.cta-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(108, 99, 255, 0.6);
+}
+
+.how-it-works {
+  max-width: 800px;
+  margin: 60px auto;
+  padding: 20px;
+  text-align: center;
+}
+
+.how-it-works-title {
+  font-size: 2.5rem;
+  margin-bottom: 40px;
+  color: var(--accent);
+}
+
+.process-steps {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.step {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 25px;
+  width: 200px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.step-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 15px;
+}
+
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2.5rem;
+  }
+  
+  .subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .features {
+    flex-direction: column;
+    align-items: center;
+  }
+}

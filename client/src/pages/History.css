@@ -1,0 +1,130 @@
+.history-page {
+  padding: 40px 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.history-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.history-header h1 {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.loading i {
+  font-size: 3rem;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  opacity: 0.7;
+}
+
+.empty-state i {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.history-item {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.history-item:hover {
+  transform: translateX(10px);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.item-header h3 {
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+.date {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.transcription-preview {
+  margin: 15px 0;
+  opacity: 0.9;
+  line-height: 1.6;
+}
+
+.item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.language {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.8;
+}
+
+.view-btn {
+  padding: 10px 20px;
+  background: var(--primary);
+  color: var(--light);
+  border: none;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.view-btn:hover {
+  background: var(--accent);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .history-header h1 {
+    font-size: 2rem;
+  }
+
+  .item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .item-footer {
+    flex-direction: column;
+    gap: 15px;
+  }
+}

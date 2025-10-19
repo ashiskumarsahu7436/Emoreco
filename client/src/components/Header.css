@@ -1,0 +1,131 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 50px;
+  background-color: rgba(26, 26, 64, 0.8);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.logo {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--light);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo i {
+  color: var(--primary);
+}
+
+.nav-links {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+}
+
+.nav-links a {
+  color: var(--light);
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.nav-links a:hover {
+  color: var(--accent);
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.nav-links a:hover::after {
+  width: 100%;
+}
+
+.auth-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.btn {
+  padding: 12px 25px;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  outline: none;
+  font-size: 16px;
+}
+
+.sign-in-btn {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--light);
+}
+
+.sign-in-btn:hover {
+  background: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(108, 99, 255, 0.4);
+}
+
+.free-trial-btn {
+  background: var(--secondary);
+  color: var(--light);
+}
+
+.free-trial-btn:hover {
+  background: #FF8FA3;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 101, 132, 0.4);
+}
+
+.sign-out-btn {
+  background: transparent;
+  border: 2px solid var(--secondary);
+  color: var(--light);
+}
+
+.sign-out-btn:hover {
+  background: var(--secondary);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 101, 132, 0.4);
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 15px 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+
+  .nav-links {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .logo {
+    font-size: 24px;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+}
