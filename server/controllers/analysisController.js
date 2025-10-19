@@ -217,7 +217,7 @@ Primary Emotion:`
     const groq = getGroqClient()
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.7,
       max_tokens: 200
     })
@@ -257,7 +257,7 @@ Detailed Analysis:`
     const groq = getGroqClient()
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.8,
       max_tokens: 800
     })
@@ -300,7 +300,7 @@ Provide a helpful, insightful answer based on the analysis.`
     const groq = getGroqClient()
     const completion = await groq.chat.completions.create({
       messages: [{ role: 'user', content: contextPrompt }],
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       temperature: 0.7,
       max_tokens: 500
     })
