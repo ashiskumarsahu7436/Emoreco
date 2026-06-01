@@ -77,14 +77,12 @@
 
 .sign-in-btn {
   background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  color: #f4f4f5;
+  border: none;
 }
 
 .sign-in-btn:hover {
-  color: var(--text);
-  border-color: var(--border-hover);
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .get-started-btn {
