@@ -2,20 +2,31 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Inter', 'Poppins', sans-serif;
 }
 
 :root {
-  --primary: #6C63FF;
-  --secondary: #FF6584;
-  --accent: #36D1DC;
-  --dark: #1A1A40;
-  --light: #F5F5F5;
+  --bg: #0d0d0f;
+  --bg-card: #161618;
+  --bg-card-hover: #1c1c1f;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --blue: #3b82f6;
+  --blue-hover: #2563eb;
+  --cyan: #22d3ee;
+  --green: #4ade80;
+  --text: #f1f1f3;
+  --text-muted: #8b8b9a;
+  --primary: #3b82f6;
+  --accent: #22d3ee;
+  --secondary: #a78bfa;
+  --light: #f1f1f3;
+  --dark: #0d0d0f;
 }
 
 body {
-  background: linear-gradient(135deg, #1A1A40 0%, #3F3FBF 100%);
-  color: var(--light);
+  background-color: var(--bg);
+  color: var(--text);
   min-height: 100vh;
   line-height: 1.6;
 }
@@ -28,11 +39,11 @@ body {
 
 button {
   cursor: pointer;
-  font-family: 'Poppins', sans-serif;
+  font-family: inherit;
 }
 
 input, textarea {
-  font-family: 'Poppins', sans-serif;
+  font-family: inherit;
 }
 
 a {
@@ -41,18 +52,18 @@ a {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--primary);
-  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+  background: var(--blue);
 }

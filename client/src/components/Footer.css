@@ -1,11 +1,40 @@
 .footer {
-  text-align: center;
-  padding: 30px;
   margin-top: auto;
-  background-color: rgba(26, 26, 64, 0.8);
-  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  background-color: var(--bg);
+  padding: 24px 32px;
 }
 
-.footer p {
-  opacity: 0.8;
+.footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.footer-logo-icon {
+  width: 26px;
+  height: 26px;
+  background: var(--blue);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-copy {
+  font-size: 13px;
+  color: var(--text-muted);
 }
