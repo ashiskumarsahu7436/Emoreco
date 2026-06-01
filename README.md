@@ -92,4 +92,4 @@ Add these to `server/.env` file.
 ## Known Issues & Notes
 - Render deployment requires vite in dependencies (not devDependencies) - Already fixed
 - API keys need to be added to server/.env for full functionality
-- Frontend is accessible on port 5000, backend API on port 3000
+- Frontend is accessible on port 5000, backend API on port 3000 .
