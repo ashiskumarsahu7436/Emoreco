@@ -1,5 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { AudioWaveform } from 'lucide-react'
 import './Header.css'
 
 function Header() {
@@ -23,9 +24,7 @@ function Header() {
     <header className="header">
       <Link to="/" className="logo">
         <span className="logo-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 12 Q4 6 6 12 Q8 18 10 12 Q12 6 14 12 Q16 18 18 12 Q20 6 22 12"/>
-          </svg>
+          <AudioWaveform size={20} color="white" strokeWidth={2} />
         </span>
         EMORECO
       </Link>
