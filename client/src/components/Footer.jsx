@@ -6,8 +6,12 @@ function Footer() {
       <div className="footer-inner">
         <div className="footer-logo">
           <span className="footer-logo-icon">
-            <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-              <path d="M9 1.5C4.86 1.5 1.5 4.86 1.5 9s3.36 7.5 7.5 7.5 7.5-3.36 7.5-7.5S13.14 1.5 9 1.5zM7.5 12.75L3.75 9l1.058-1.058 2.692 2.685 5.692-5.692L14.25 6l-6.75 6.75z" fill="white"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9.5 2a2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 0 7 10.5v1A2.5 2.5 0 0 0 9.5 14"/>
+              <path d="M14.5 2a2.5 2.5 0 0 0-2.5 2.5v1a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5"/>
+              <path d="M12 14v4"/>
+              <path d="M9.5 14a2.5 2.5 0 0 0 0 5H12"/>
+              <path d="M14.5 14a2.5 2.5 0 0 1 0 5H12"/>
             </svg>
           </span>
           EMORECO
