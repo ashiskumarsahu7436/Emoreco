@@ -23,12 +23,8 @@ function Header() {
     <header className="header">
       <Link to="/" className="logo">
         <span className="logo-icon">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9.5 2a2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 0 7 10.5v1A2.5 2.5 0 0 0 9.5 14"/>
-            <path d="M14.5 2a2.5 2.5 0 0 0-2.5 2.5v1a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5"/>
-            <path d="M12 14v4"/>
-            <path d="M9.5 14a2.5 2.5 0 0 0 0 5H12"/>
-            <path d="M14.5 14a2.5 2.5 0 0 1 0 5H12"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 12 Q4 6 6 12 Q8 18 10 12 Q12 6 14 12 Q16 18 18 12 Q20 6 22 12"/>
           </svg>
         </span>
         EMORECO

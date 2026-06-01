@@ -23,10 +23,10 @@
 }
 
 .logo-icon {
-  width: 30px;
-  height: 30px;
-  background: var(--blue);
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;

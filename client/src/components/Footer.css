@@ -25,10 +25,10 @@
 }
 
 .footer-logo-icon {
-  width: 26px;
-  height: 26px;
-  background: var(--blue);
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
