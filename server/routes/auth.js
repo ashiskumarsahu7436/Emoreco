@@ -1,7 +1,7 @@
 import express from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import db from '../config/database.js'
+import { getOne, run } from '../config/database.js'
 
 const router = express.Router()
 
@@ -13,16 +13,16 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' })
     }
 
-    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
+    const existingUser = await getOne('SELECT * FROM users WHERE email = ?', [email])
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' })
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
-
-    const result = db.prepare(
-      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)'
-    ).run(name, email, hashedPassword)
+    const result = await run(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      [name, email, hashedPassword]
+    )
 
     const token = jwt.sign(
       { userId: result.lastInsertRowid, email },
@@ -32,11 +32,7 @@ router.post('/signup', async (req, res) => {
 
     res.json({
       token,
-      user: {
-        id: result.lastInsertRowid,
-        name,
-        email
-      }
+      user: { id: result.lastInsertRowid, name, email }
     })
   } catch (err) {
     console.error('Signup error:', err)
@@ -52,7 +48,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' })
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
+    const user = await getOne('SELECT * FROM users WHERE email = ?', [email])
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
@@ -70,11 +66,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      }
+      user: { id: user.id, name: user.name, email: user.email }
     })
   } catch (err) {
     console.error('Login error:', err)

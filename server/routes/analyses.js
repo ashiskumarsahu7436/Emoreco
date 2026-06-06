@@ -2,7 +2,7 @@ import express from 'express'
 import multer from 'multer'
 import { authenticateToken } from '../middleware/auth.js'
 import { analyzeAudio, chatWithAI, generatePDF } from '../controllers/analysisController.js'
-import db from '../config/database.js'
+import { getOne, getAll, run } from '../config/database.js'
 
 const router = express.Router()
 
@@ -13,32 +13,30 @@ const upload = multer({
 
 router.post('/', authenticateToken, upload.single('audio'), analyzeAudio)
 
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { spaceId, limit = 50 } = req.query
 
-    let query = `
+    let queryText = `
       SELECT a.*, s.name as space_name
       FROM analyses a
       LEFT JOIN spaces s ON a.space_id = s.id
       WHERE a.user_id = ?
     `
-    
     const params = [req.user.userId]
 
     if (spaceId) {
-      query += ' AND a.space_id = ?'
+      queryText += ' AND a.space_id = ?'
       params.push(spaceId)
     }
 
-    query += ' ORDER BY a.created_at DESC'
-    
+    queryText += ' ORDER BY a.created_at DESC'
+
     if (!spaceId) {
-      query += ' LIMIT ?'
-      params.push(parseInt(limit))
+      queryText += ` LIMIT ${parseInt(limit)}`
     }
 
-    const analyses = db.prepare(query).all(...params)
+    const analyses = await getAll(queryText, params)
 
     const result = analyses.map(a => ({
       ...a,
@@ -53,14 +51,14 @@ router.get('/', authenticateToken, (req, res) => {
   }
 })
 
-router.get('/:id', authenticateToken, (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const analysis = db.prepare(`
+    const analysis = await getOne(`
       SELECT a.*, s.name as space_name
       FROM analyses a
       LEFT JOIN spaces s ON a.space_id = s.id
       WHERE a.id = ? AND a.user_id = ?
-    `).get(req.params.id, req.user.userId)
+    `, [req.params.id, req.user.userId])
 
     if (!analysis) {
       return res.status(404).json({ error: 'Analysis not found' })
@@ -81,16 +79,18 @@ router.post('/:id/chat', authenticateToken, chatWithAI)
 
 router.get('/:id/pdf', authenticateToken, generatePDF)
 
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const analysis = db.prepare('SELECT * FROM analyses WHERE id = ? AND user_id = ?')
-      .get(req.params.id, req.user.userId)
+    const analysis = await getOne(
+      'SELECT * FROM analyses WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.userId]
+    )
 
     if (!analysis) {
       return res.status(404).json({ error: 'Analysis not found' })
     }
 
-    db.prepare('DELETE FROM analyses WHERE id = ?').run(req.params.id)
+    await run('DELETE FROM analyses WHERE id = ?', [req.params.id])
     res.json({ message: 'Analysis deleted successfully' })
   } catch (err) {
     console.error('Delete analysis error:', err)
@@ -98,33 +98,28 @@ router.delete('/:id', authenticateToken, (req, res) => {
   }
 })
 
-router.delete('/', authenticateToken, (req, res) => {
+router.delete('/', authenticateToken, async (req, res) => {
   try {
     const { spaceId } = req.query
 
     if (spaceId) {
-      const space = db.prepare('SELECT * FROM spaces WHERE id = ? AND user_id = ?')
-        .get(spaceId, req.user.userId)
+      const space = await getOne(
+        'SELECT * FROM spaces WHERE id = ? AND user_id = ?',
+        [spaceId, req.user.userId]
+      )
 
       if (!space) {
         return res.status(404).json({ error: 'Space not found' })
       }
 
-      const result = db.prepare('DELETE FROM analyses WHERE space_id = ? AND user_id = ?')
-        .run(spaceId, req.user.userId)
-      
-      res.json({ 
-        message: 'Space history cleared successfully',
-        deletedCount: result.changes
-      })
+      const result = await run(
+        'DELETE FROM analyses WHERE space_id = ? AND user_id = ?',
+        [spaceId, req.user.userId]
+      )
+      res.json({ message: 'Space history cleared successfully', deletedCount: result.changes })
     } else {
-      const result = db.prepare('DELETE FROM analyses WHERE user_id = ?')
-        .run(req.user.userId)
-      
-      res.json({ 
-        message: 'All history cleared successfully',
-        deletedCount: result.changes
-      })
+      const result = await run('DELETE FROM analyses WHERE user_id = ?', [req.user.userId])
+      res.json({ message: 'All history cleared successfully', deletedCount: result.changes })
     }
   } catch (err) {
     console.error('Clear history error:', err)

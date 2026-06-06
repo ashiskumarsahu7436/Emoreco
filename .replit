@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "python-3.11"]
+modules = ["nodejs-20", "web", "nix"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -16,23 +16,23 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Server"
+args = "Backend"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Start application"
 
 [[workflows.workflow]]
-name = "Server"
+name = "Backend"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+args = "cd server && node index.js"
+waitForPort = 3000
 
 [workflows.workflow.metadata]
-outputType = "webview"
+outputType = "console"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -40,7 +40,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "cd client && npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
@@ -51,14 +51,19 @@ localPort = 3000
 externalPort = 3000
 
 [[ports]]
-localPort = 5000
-externalPort = 80
-
-[[ports]]
 localPort = 5001
 externalPort = 3001
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [deployment]
 deploymentTarget = "vm"
 run = ["npm", "start"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+JWT_SECRET = "c7cd0a8c6372d310fbf8741ec365e0d158b83c4ef96196e48e14a1813ecd2093e3bbbb013019292ef2c1a42142fd425f0c562f3c566dc4df75a03c6e5419885a"

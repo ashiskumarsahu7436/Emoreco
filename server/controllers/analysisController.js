@@ -5,7 +5,7 @@ import { createClient } from '@deepgram/sdk'
 import Groq from 'groq-sdk'
 import axios from 'axios'
 import PDFDocument from 'pdfkit'
-import db from '../config/database.js'
+import { getOne, getAll, run } from '../config/database.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -26,7 +26,7 @@ function getGroqClient() {
 
 export const analyzeAudio = async (req, res) => {
   let audioPath = null
-  
+
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Audio file required' })
@@ -37,7 +37,7 @@ export const analyzeAudio = async (req, res) => {
 
     console.log('Step 1: Transcribing audio with Deepgram...')
     const transcription = await transcribeAudio(audioPath)
-    
+
     if (!transcription) {
       return res.status(500).json({ error: 'Transcription failed' })
     }
@@ -48,14 +48,13 @@ export const analyzeAudio = async (req, res) => {
     console.log('Step 3: Getting space history...')
     let spaceHistory = []
     if (spaceId) {
-      const previousAnalyses = db.prepare(`
+      spaceHistory = await getAll(`
         SELECT transcription, primary_emotion, detailed_analysis
         FROM analyses
         WHERE space_id = ?
         ORDER BY created_at DESC
         LIMIT 5
-      `).all(spaceId)
-      spaceHistory = previousAnalyses
+      `, [spaceId])
     }
 
     console.log('Step 4: Generating Primary Emotion analysis...')
@@ -73,12 +72,12 @@ export const analyzeAudio = async (req, res) => {
       spaceHistory
     )
 
-    const result = db.prepare(`
+    const result = await run(`
       INSERT INTO analyses (
         user_id, space_id, audio_path, transcription, language,
         hume_emotions, primary_emotion, detailed_analysis
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       req.user.userId,
       spaceId || null,
       audioPath,
@@ -87,7 +86,7 @@ export const analyzeAudio = async (req, res) => {
       JSON.stringify(emotions),
       primaryEmotion,
       detailedAnalysis
-    )
+    ])
 
     res.json({
       analysisId: result.lastInsertRowid,
@@ -109,7 +108,7 @@ async function transcribeAudio(audioPath) {
   try {
     const deepgram = getDeepgramClient()
     const audioBuffer = fs.readFileSync(audioPath)
-    
+
     const { result } = await deepgram.listen.prerecorded.transcribeFile(
       audioBuffer,
       {
@@ -123,10 +122,7 @@ async function transcribeAudio(audioPath) {
     const transcript = result.results.channels[0].alternatives[0].transcript
     const language = result.results.channels[0].detected_language || 'en'
 
-    return {
-      text: transcript,
-      language
-    }
+    return { text: transcript, language }
   } catch (err) {
     console.error('Deepgram error:', err)
     throw new Error('Transcription failed: ' + err.message)
@@ -141,16 +137,12 @@ async function analyzeEmotions(audioPath) {
     const response = await axios.post(
       'https://api.hume.ai/v0/batch/jobs',
       {
-        models: {
-          prosody: {}
-        },
-        files: [
-          {
-            filename: 'audio.wav',
-            content_type: 'audio/wav',
-            data: base64Audio
-          }
-        ]
+        models: { prosody: {} },
+        files: [{
+          filename: 'audio.wav',
+          content_type: 'audio/wav',
+          data: base64Audio
+        }]
       },
       {
         headers: {
@@ -161,20 +153,15 @@ async function analyzeEmotions(audioPath) {
     )
 
     const jobId = response.data.job_id
-
     await new Promise(resolve => setTimeout(resolve, 5000))
 
     const resultResponse = await axios.get(
       `https://api.hume.ai/v0/batch/jobs/${jobId}/predictions`,
-      {
-        headers: {
-          'X-Hume-Api-Key': process.env.HUME_API_KEY
-        }
-      }
+      { headers: { 'X-Hume-Api-Key': process.env.HUME_API_KEY } }
     )
 
     const predictions = resultResponse.data[0]?.results?.predictions?.[0]?.models?.prosody?.grouped_predictions
-    
+
     if (!predictions || predictions.length === 0) {
       return { summary: 'Neutral emotional state' }
     }
@@ -221,7 +208,6 @@ Primary Emotion:`
       temperature: 0.7,
       max_tokens: 200
     })
-
     return completion.choices[0].message.content.trim()
   } catch (err) {
     console.error('Groq error (primary):', err)
@@ -261,7 +247,6 @@ Detailed Analysis:`
       temperature: 0.8,
       max_tokens: 800
     })
-
     return completion.choices[0].message.content.trim()
   } catch (err) {
     console.error('Groq error (detailed):', err)
@@ -274,9 +259,10 @@ export const chatWithAI = async (req, res) => {
     const { id } = req.params
     const { message } = req.body
 
-    const analysis = db.prepare(`
-      SELECT * FROM analyses WHERE id = ? AND user_id = ?
-    `).get(id, req.user.userId)
+    const analysis = await getOne(
+      'SELECT * FROM analyses WHERE id = ? AND user_id = ?',
+      [id, req.user.userId]
+    )
 
     if (!analysis) {
       return res.status(404).json({ error: 'Analysis not found' })
@@ -310,8 +296,10 @@ Provide a helpful, insightful answer based on the analysis.`
     chatHistory.push({ role: 'user', content: message })
     chatHistory.push({ role: 'assistant', content: aiResponse })
 
-    db.prepare('UPDATE analyses SET chat_history = ? WHERE id = ?')
-      .run(JSON.stringify(chatHistory), id)
+    await run(
+      'UPDATE analyses SET chat_history = ? WHERE id = ?',
+      [JSON.stringify(chatHistory), id]
+    )
 
     res.json({ response: aiResponse })
 
@@ -325,19 +313,19 @@ export const generatePDF = async (req, res) => {
   try {
     const { id } = req.params
 
-    const analysis = db.prepare(`
+    const analysis = await getOne(`
       SELECT a.*, s.name as space_name
       FROM analyses a
       LEFT JOIN spaces s ON a.space_id = s.id
       WHERE a.id = ? AND a.user_id = ?
-    `).get(id, req.user.userId)
+    `, [id, req.user.userId])
 
     if (!analysis) {
       return res.status(404).json({ error: 'Analysis not found' })
     }
 
     const doc = new PDFDocument({ margin: 50 })
-    
+
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename=emotion-analysis-${id}.pdf`)
 
@@ -365,9 +353,7 @@ export const generatePDF = async (req, res) => {
     doc.fontSize(11).fillColor('black').text(analysis.detailed_analysis, { align: 'justify' })
     doc.moveDown()
 
-    doc.fontSize(8).fillColor('gray').text('Generated by EMORECO - Voice-Based AI Emotion Recognition', {
-      align: 'center'
-    })
+    doc.fontSize(8).fillColor('gray').text('Generated by EMORECO - Voice-Based AI Emotion Recognition', { align: 'center' })
 
     doc.end()
 
