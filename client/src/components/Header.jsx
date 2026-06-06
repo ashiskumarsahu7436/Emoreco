@@ -7,18 +7,19 @@ function Header() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userInitials, setUserInitials] = useState('JD')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     setIsLoggedIn(!!token)
+    if (token) {
+      const u = JSON.parse(localStorage.getItem('user') || '{}')
+      if (u.name) {
+        const initials = u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+        setUserInitials(initials)
+      }
+    }
   }, [location])
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setIsLoggedIn(false)
-    navigate('/')
-  }
 
   return (
     <header className="header">
@@ -53,9 +54,17 @@ function Header() {
 
       <div className="auth-buttons">
         {isLoggedIn ? (
-          <button className="btn sign-out-btn" onClick={handleLogout}>
-            Sign Out
-          </button>
+          <div className="header-user-area">
+            <button className="header-bell" aria-label="Notifications">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+            </button>
+            <Link to="/settings" className={`header-avatar ${location.pathname === '/settings' ? 'active' : ''}`} title="Settings">
+              {userInitials}
+            </Link>
+          </div>
         ) : (
           <>
             <Link to="/login">

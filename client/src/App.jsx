@@ -8,6 +8,7 @@ import History from './pages/History'
 import Analysis from './pages/Analysis'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Settings from './pages/Settings'
 import './App.css'
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
             <Route path="/spaces" element={<Spaces />} />
             <Route path="/history" element={<History />} />
             <Route path="/analysis/:id" element={<Analysis />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
         <Footer />
