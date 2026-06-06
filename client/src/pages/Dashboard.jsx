@@ -202,7 +202,7 @@ function Dashboard() {
               <h2 className="db-card-title">Record with Microphone</h2>
               <p className="db-card-desc">Start a live recording directly from your browser and analyze emotion in real time.</p>
             </div>
-            <button className="db-btn-primary" onClick={() => setShowRecordModal(true)}>
+            <button className="db-btn-primary" onClick={() => navigate('/record')}>
               <MicIconSm /> Start Recording
             </button>
           </div>
