@@ -26,19 +26,19 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { name, personName } = req.body
 
-    if (!name || !personName) {
-      return res.status(400).json({ error: 'Space name and person name required' })
+    if (!name) {
+      return res.status(400).json({ error: 'Space name is required' })
     }
 
     const result = await run(
       'INSERT INTO spaces (user_id, name, person_name) VALUES (?, ?, ?)',
-      [req.user.userId, name, personName]
+      [req.user.userId, name, personName || '']
     )
 
     res.json({
       id: result.lastInsertRowid,
       name,
-      person_name: personName,
+      person_name: personName || '',
       user_id: req.user.userId
     })
   } catch (err) {
