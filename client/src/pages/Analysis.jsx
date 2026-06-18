@@ -1,6 +1,27 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import {
+  ArrowLeft,
+  FileText,
+  Smile,
+  Brain,
+  MessageSquare,
+  Download,
+  Send,
+  Loader2,
+  Mic,
+  Zap,
+  TrendingUp,
+  Activity,
+  Clock,
+  PauseCircle,
+  User,
+  Globe,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 import './Analysis.css'
 
 function Analysis() {
@@ -17,10 +38,7 @@ function Analysis() {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
+    if (!token) { navigate('/login'); return }
     fetchAnalysis()
   }, [id, navigate])
 
@@ -37,10 +55,8 @@ function Analysis() {
         headers: { Authorization: `Bearer ${token}` }
       })
       setAnalysis(response.data)
-      if (response.data.chat_history) {
-        setMessages(response.data.chat_history)
-      }
-    } catch (err) {
+      if (response.data.chat_history) setMessages(response.data.chat_history)
+    } catch {
       alert('Failed to load analysis')
       navigate('/history')
     } finally {
@@ -51,12 +67,9 @@ function Analysis() {
   const sendChatMessage = async (e) => {
     e.preventDefault()
     if (!newMessage.trim()) return
-
-    const userMessage = { role: 'user', content: newMessage }
-    setMessages(prev => [...prev, userMessage])
+    setMessages(prev => [...prev, { role: 'user', content: newMessage }])
     setNewMessage('')
     setSendingMessage(true)
-
     try {
       const token = localStorage.getItem('token')
       const response = await axios.post(
@@ -65,7 +78,7 @@ function Analysis() {
         { headers: { Authorization: `Bearer ${token}` } }
       )
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }])
-    } catch (err) {
+    } catch {
       alert('Failed to send message')
     } finally {
       setSendingMessage(false)
@@ -86,305 +99,327 @@ function Analysis() {
       document.body.appendChild(link)
       link.click()
       link.remove()
-    } catch (err) {
+    } catch {
       alert('Failed to download PDF')
     }
   }
 
-  const getEmotionConfig = (emotion) => {
-    const map = {
-      angry:   { icon: '😠', label: 'Angry',   color: '#FF4444' },
-      heavy:   { icon: '😔', label: 'Heavy',   color: '#8B5CF6' },
-      sad:     { icon: '😢', label: 'Sad',     color: '#3B82F6' },
-      neutral: { icon: '😐', label: 'Neutral', color: '#6B7280' },
-    }
-    return map[emotion?.toLowerCase()] || { icon: '🎭', label: emotion || 'Unknown', color: '#6B7280' }
+  const EMOTION_MAP = {
+    angry:   { emoji: '😠', label: 'Angry',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)' },
+    heavy:   { emoji: '😔', label: 'Heavy',   color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.25)' },
+    sad:     { emoji: '😢', label: 'Sad',     color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.25)' },
+    neutral: { emoji: '😐', label: 'Neutral', color: '#9f9fa9', bg: 'rgba(159,159,169,0.1)', border: 'rgba(159,159,169,0.25)' },
   }
 
-  const getPositivityConfig = (val) => {
-    const map = {
-      positive: { icon: '😊', label: 'Positive', color: '#10B981' },
-      neutral:  { icon: '😐', label: 'Neutral',  color: '#6B7280' },
-      negative: { icon: '😟', label: 'Negative', color: '#EF4444' },
-    }
-    return map[val?.toLowerCase()] || { icon: '❓', label: val || 'Unknown', color: '#6B7280' }
+  const POSITIVITY_MAP = {
+    positive: { label: 'Positive', color: '#22c55e', bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.25)' },
+    neutral:  { label: 'Neutral',  color: '#9f9fa9', bg: 'rgba(159,159,169,0.1)', border: 'rgba(159,159,169,0.25)' },
+    negative: { label: 'Negative', color: '#ef4444', bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.25)' },
   }
 
-  const getArousalConfig = (val) => {
-    const map = {
-      strong: { icon: '⚡', label: 'High Energy', color: '#F59E0B', level: 3 },
-      neutral: { icon: '〰️', label: 'Moderate',   color: '#6B7280', level: 2 },
-      weak:   { icon: '🌙', label: 'Low Energy',  color: '#60A5FA', level: 1 },
-    }
-    return map[val?.toLowerCase()] || { icon: '❓', label: val || 'Unknown', color: '#6B7280', level: 0 }
+  const AROUSAL_MAP = {
+    strong:  { label: 'High',     color: '#f59e0b', pct: 100 },
+    neutral: { label: 'Moderate', color: '#60a5fa', pct: 55 },
+    weak:    { label: 'Low',      color: '#6b7280', pct: 20 },
   }
 
-  const getEngagementConfig = (val) => {
-    const map = {
-      engaged:   { icon: '🎯', label: 'Engaged',   color: '#10B981' },
-      neutral:   { icon: '😶', label: 'Neutral',   color: '#6B7280' },
-      withdrawn: { icon: '🚶', label: 'Withdrawn', color: '#F59E0B' },
-    }
-    return map[val?.toLowerCase()] || { icon: '❓', label: val || 'Unknown', color: '#6B7280' }
+  const ENGAGEMENT_MAP = {
+    engaged:   { label: 'Engaged',   color: '#22c55e' },
+    neutral:   { label: 'Neutral',   color: '#9f9fa9' },
+    withdrawn: { label: 'Withdrawn', color: '#f59e0b' },
   }
 
-  const getRateConfig = (val) => {
-    const map = {
-      fast:   { icon: '🚀', label: 'Fast',   color: '#EF4444' },
-      normal: { icon: '🚶', label: 'Normal', color: '#10B981' },
-      slow:   { icon: '🐢', label: 'Slow',   color: '#3B82F6' },
-    }
-    return map[val?.toLowerCase()] || { icon: '❓', label: val || 'Unknown', color: '#6B7280' }
+  const RATE_MAP = {
+    fast:   { label: 'Fast',   color: '#ef4444' },
+    normal: { label: 'Normal', color: '#22c55e' },
+    slow:   { label: 'Slow',   color: '#60a5fa' },
   }
 
-  const getGenderIcon = (g) => g?.toLowerCase() === 'female' ? '👩' : g?.toLowerCase() === 'male' ? '👨' : '🧑'
-  const getLanguageLabel = (code) => {
-    const langs = {
-      en: 'English', hi: 'Hindi', ta: 'Tamil', te: 'Telugu',
-      mr: 'Marathi', bn: 'Bengali', gu: 'Gujarati', kn: 'Kannada',
-      ml: 'Malayalam', pa: 'Punjabi', ur: 'Urdu', fr: 'French',
-      de: 'German', es: 'Spanish', zh: 'Chinese', ja: 'Japanese',
-    }
-    if (!code) return null
-    return langs[code.toLowerCase()] || code.toUpperCase()
+  const LANG_MAP = {
+    en:'English', hi:'Hindi', ta:'Tamil', te:'Telugu', mr:'Marathi',
+    bn:'Bengali', gu:'Gujarati', kn:'Kannada', ml:'Malayalam', pa:'Punjabi',
+    ur:'Urdu', fr:'French', de:'German', es:'Spanish', zh:'Chinese', ja:'Japanese',
   }
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <i className="fas fa-spinner fa-spin"></i>
-        <p>Loading analysis...</p>
+      <div className="an-loading">
+        <Loader2 size={32} className="an-spin" />
+        <p>Loading analysis…</p>
       </div>
     )
   }
 
-  if (!analysis) {
-    return <div className="error-container">Analysis not found</div>
-  }
+  if (!analysis) return <div className="an-loading"><p>Analysis not found</p></div>
 
-  const behavioral = analysis.hume_emotions || {}
-  const hasBehavioral = behavioral.dominantEmotion || behavioral.dominantPositivity || behavioral.dominantArousal
-  const hasDemographics = behavioral.detectedGender || behavioral.estimatedAge || behavioral.detectedLanguage
+  const beh = analysis.hume_emotions || {}
+  const hasBeh = beh.dominantEmotion || beh.dominantPositivity || beh.dominantArousal
+  const hasDemo = beh.detectedGender || beh.estimatedAge || beh.detectedLanguage
 
-  const emotionCfg   = getEmotionConfig(behavioral.dominantEmotion)
-  const positivityCfg = getPositivityConfig(behavioral.dominantPositivity)
-  const arousalCfg   = getArousalConfig(behavioral.dominantArousal)
-  const engagementCfg = getEngagementConfig(behavioral.dominantEngagement)
-  const rateCfg      = getRateConfig(behavioral.dominantSpeakingRate)
+  const emotion     = EMOTION_MAP[beh.dominantEmotion?.toLowerCase()] || null
+  const positivity  = POSITIVITY_MAP[beh.dominantPositivity?.toLowerCase()] || null
+  const arousal     = AROUSAL_MAP[beh.dominantArousal?.toLowerCase()] || null
+  const engagement  = ENGAGEMENT_MAP[beh.dominantEngagement?.toLowerCase()] || null
+  const rate        = RATE_MAP[beh.dominantSpeakingRate?.toLowerCase()] || null
+  const langLabel   = LANG_MAP[beh.detectedLanguage?.toLowerCase()] || (beh.detectedLanguage ? beh.detectedLanguage.toUpperCase() : null)
+  const fallbackLang = LANG_MAP[analysis.language?.toLowerCase()] || analysis.language?.toUpperCase()
+
+  const fmt = (d) => new Date(d).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
 
   return (
-    <div className="analysis-page">
-      <div className="analysis-header">
-        <button className="back-btn" onClick={() => navigate('/history')}>
-          <i className="fas fa-arrow-left"></i> Back to History
-        </button>
-        <button className="pdf-btn" onClick={downloadPDF}>
-          <i className="fas fa-file-pdf"></i> Download PDF
-        </button>
-      </div>
+    <div className="an-page">
+      <div className="an-container">
 
-      <div className="analysis-container">
-
-        <section className="transcription-section">
-          <h2><i className="fas fa-file-alt"></i> Transcription</h2>
-          <div className="content-box">
-            <p>{analysis.transcription}</p>
-          </div>
-        </section>
-
-        {hasBehavioral && (
-          <section className="voice-profile-section">
-            <h2><i className="fas fa-wave-square"></i> Voice Profile</h2>
-            <p className="section-subtitle">Detected from vocal acoustics by Behavioral Signals AI</p>
-
-            <div className="voice-metrics-grid">
-              <div className="metric-card" style={{ '--accent-color': emotionCfg.color }}>
-                <div className="metric-icon">{emotionCfg.icon}</div>
-                <div className="metric-label">Emotion</div>
-                <div className="metric-value" style={{ color: emotionCfg.color }}>
-                  {emotionCfg.label}
-                </div>
-              </div>
-
-              <div className="metric-card" style={{ '--accent-color': positivityCfg.color }}>
-                <div className="metric-icon">{positivityCfg.icon}</div>
-                <div className="metric-label">Tone</div>
-                <div className="metric-value" style={{ color: positivityCfg.color }}>
-                  {positivityCfg.label}
-                </div>
-              </div>
-
-              <div className="metric-card" style={{ '--accent-color': arousalCfg.color }}>
-                <div className="metric-icon">{arousalCfg.icon}</div>
-                <div className="metric-label">Energy Level</div>
-                <div className="metric-value" style={{ color: arousalCfg.color }}>
-                  {arousalCfg.label}
-                </div>
-                <div className="energy-bar">
-                  <div
-                    className="energy-fill"
-                    style={{
-                      width: `${(arousalCfg.level / 3) * 100}%`,
-                      background: arousalCfg.color
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="metric-card" style={{ '--accent-color': engagementCfg.color }}>
-                <div className="metric-icon">{engagementCfg.icon}</div>
-                <div className="metric-label">Engagement</div>
-                <div className="metric-value" style={{ color: engagementCfg.color }}>
-                  {engagementCfg.label}
-                </div>
-              </div>
-
-              <div className="metric-card" style={{ '--accent-color': rateCfg.color }}>
-                <div className="metric-icon">{rateCfg.icon}</div>
-                <div className="metric-label">Speaking Rate</div>
-                <div className="metric-value" style={{ color: rateCfg.color }}>
-                  {rateCfg.label}
-                </div>
-              </div>
-
-              <div
-                className="metric-card"
-                style={{ '--accent-color': behavioral.hesitationDetected ? '#F59E0B' : '#10B981' }}
-              >
-                <div className="metric-icon">
-                  {behavioral.hesitationDetected ? '⏸️' : '▶️'}
-                </div>
-                <div className="metric-label">Hesitation</div>
-                <div
-                  className="metric-value"
-                  style={{ color: behavioral.hesitationDetected ? '#F59E0B' : '#10B981' }}
-                >
-                  {behavioral.hesitationDetected ? 'Detected' : 'None'}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {hasDemographics && (
-          <section className="demographics-section">
-            <h2><i className="fas fa-user-circle"></i> Speaker Profile</h2>
-            <p className="section-subtitle">Estimated from voice characteristics</p>
-            <div className="demographics-row">
-              {behavioral.detectedGender && (
-                <div className="demo-chip">
-                  <span className="demo-icon">{getGenderIcon(behavioral.detectedGender)}</span>
-                  <span className="demo-text">
-                    <span className="demo-key">Gender</span>
-                    <span className="demo-val">
-                      {behavioral.detectedGender.charAt(0).toUpperCase() + behavioral.detectedGender.slice(1)}
-                    </span>
-                  </span>
-                </div>
-              )}
-              {behavioral.estimatedAge && (
-                <div className="demo-chip">
-                  <span className="demo-icon">🎂</span>
-                  <span className="demo-text">
-                    <span className="demo-key">Est. Age</span>
-                    <span className="demo-val">~{behavioral.estimatedAge} yrs</span>
-                  </span>
-                </div>
-              )}
-              {behavioral.detectedLanguage && (
-                <div className="demo-chip">
-                  <span className="demo-icon">🌐</span>
-                  <span className="demo-text">
-                    <span className="demo-key">Language</span>
-                    <span className="demo-val">
-                      {getLanguageLabel(behavioral.detectedLanguage)}
-                    </span>
-                  </span>
-                </div>
-              )}
-              {analysis.language && !behavioral.detectedLanguage && (
-                <div className="demo-chip">
-                  <span className="demo-icon">🌐</span>
-                  <span className="demo-text">
-                    <span className="demo-key">Language</span>
-                    <span className="demo-val">{getLanguageLabel(analysis.language)}</span>
-                  </span>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        <section className="primary-emotion-section">
-          <h2><i className="fas fa-smile"></i> Primary Emotion</h2>
-          <div className="content-box">
-            <p>{analysis.primary_emotion}</p>
-          </div>
-        </section>
-
-        <section className="detailed-analysis-section">
-          {!showDetailedAnalysis ? (
-            <button
-              className="show-analysis-btn"
-              onClick={() => setShowDetailedAnalysis(true)}
-            >
-              Show Detailed Analysis
+        {/* ── Header ── */}
+        <div className="an-header">
+          <div className="an-header-left">
+            <button className="an-back-btn" onClick={() => navigate('/history')}>
+              <ArrowLeft size={15} /> Back to History
             </button>
-          ) : (
-            <>
-              <h2><i className="fas fa-brain"></i> Detailed Analysis</h2>
-              <div className="content-box detailed-content">
-                <p>{analysis.detailed_analysis}</p>
+            <span className="an-date">{fmt(analysis.created_at)}</span>
+          </div>
+          <button className="an-download-btn" onClick={downloadPDF}>
+            <Download size={15} /> Export PDF
+          </button>
+        </div>
+
+        {/* ── Transcription ── */}
+        <section className="an-card">
+          <div className="an-card-header">
+            <div className="an-card-icon">
+              <FileText size={16} color="#9f9fa9" />
+            </div>
+            <div>
+              <h2 className="an-card-title">Transcription</h2>
+              <p className="an-card-sub">Speech-to-text via Deepgram{analysis.language ? ` · ${LANG_MAP[analysis.language] || analysis.language.toUpperCase()}` : ''}</p>
+            </div>
+          </div>
+          <div className="an-text-box">
+            <p className="an-body-text">{analysis.transcription}</p>
+          </div>
+        </section>
+
+        {/* ── Voice Profile ── */}
+        {hasBeh && (
+          <section className="an-card">
+            <div className="an-card-header">
+              <div className="an-card-icon">
+                <Activity size={16} color="#9f9fa9" />
               </div>
-            </>
+              <div>
+                <h2 className="an-card-title">Voice Profile</h2>
+                <p className="an-card-sub">Behavioral metrics detected from vocal acoustics</p>
+              </div>
+            </div>
+
+            <div className="an-metrics-grid">
+              {emotion && (
+                <div className="an-metric" style={{ '--m-color': emotion.color, '--m-bg': emotion.bg, '--m-border': emotion.border }}>
+                  <span className="an-metric-emoji">{emotion.emoji}</span>
+                  <span className="an-metric-key">Emotion</span>
+                  <span className="an-metric-val">{emotion.label}</span>
+                </div>
+              )}
+
+              {positivity && (
+                <div className="an-metric" style={{ '--m-color': positivity.color, '--m-bg': positivity.bg, '--m-border': positivity.border }}>
+                  <span className="an-metric-emoji">
+                    {positivity.label === 'Positive' ? '😊' : positivity.label === 'Negative' ? '😟' : '😶'}
+                  </span>
+                  <span className="an-metric-key">Tone</span>
+                  <span className="an-metric-val">{positivity.label}</span>
+                </div>
+              )}
+
+              {arousal && (
+                <div className="an-metric an-metric-wide" style={{ '--m-color': arousal.color, '--m-bg': 'rgba(255,255,255,0.03)', '--m-border': 'rgba(255,255,255,0.08)' }}>
+                  <div className="an-metric-row">
+                    <Zap size={14} color={arousal.color} />
+                    <span className="an-metric-key">Energy Level</span>
+                    <span className="an-metric-val" style={{ color: arousal.color, marginLeft: 'auto' }}>{arousal.label}</span>
+                  </div>
+                  <div className="an-energy-track">
+                    <div className="an-energy-fill" style={{ width: `${arousal.pct}%`, background: arousal.color }} />
+                  </div>
+                </div>
+              )}
+
+              {engagement && (
+                <div className="an-metric" style={{ '--m-color': engagement.color, '--m-bg': 'rgba(255,255,255,0.03)', '--m-border': 'rgba(255,255,255,0.08)' }}>
+                  <span className="an-metric-emoji">
+                    {engagement.label === 'Engaged' ? '🎯' : engagement.label === 'Withdrawn' ? '🚶' : '😶'}
+                  </span>
+                  <span className="an-metric-key">Engagement</span>
+                  <span className="an-metric-val" style={{ color: engagement.color }}>{engagement.label}</span>
+                </div>
+              )}
+
+              {rate && (
+                <div className="an-metric" style={{ '--m-color': rate.color, '--m-bg': 'rgba(255,255,255,0.03)', '--m-border': 'rgba(255,255,255,0.08)' }}>
+                  <span className="an-metric-emoji">
+                    {rate.label === 'Fast' ? '🚀' : rate.label === 'Slow' ? '🐢' : '🚶'}
+                  </span>
+                  <span className="an-metric-key">Speaking Rate</span>
+                  <span className="an-metric-val" style={{ color: rate.color }}>{rate.label}</span>
+                </div>
+              )}
+
+              <div className="an-metric" style={{
+                '--m-color': beh.hesitationDetected ? '#f59e0b' : '#22c55e',
+                '--m-bg': beh.hesitationDetected ? 'rgba(245,158,11,0.08)' : 'rgba(34,197,94,0.08)',
+                '--m-border': beh.hesitationDetected ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.2)',
+              }}>
+                <span className="an-metric-emoji">{beh.hesitationDetected ? '⏸️' : '▶️'}</span>
+                <span className="an-metric-key">Hesitation</span>
+                <span className="an-metric-val" style={{ color: beh.hesitationDetected ? '#f59e0b' : '#22c55e' }}>
+                  {beh.hesitationDetected ? 'Detected' : 'None'}
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Speaker Profile ── */}
+        {hasDemo && (
+          <section className="an-card an-card-inline">
+            <div className="an-card-icon">
+              <User size={16} color="#9f9fa9" />
+            </div>
+            <div className="an-demo-content">
+              <h2 className="an-card-title">Speaker Profile</h2>
+              <div className="an-demo-chips">
+                {beh.detectedGender && (
+                  <div className="an-demo-chip">
+                    <span>{beh.detectedGender.toLowerCase() === 'female' ? '👩' : '👨'}</span>
+                    <div className="an-demo-chip-text">
+                      <span className="an-demo-key">Gender</span>
+                      <span className="an-demo-val">{beh.detectedGender.charAt(0).toUpperCase() + beh.detectedGender.slice(1)}</span>
+                    </div>
+                  </div>
+                )}
+                {beh.estimatedAge && (
+                  <div className="an-demo-chip">
+                    <Calendar size={14} color="#71717a" />
+                    <div className="an-demo-chip-text">
+                      <span className="an-demo-key">Est. Age</span>
+                      <span className="an-demo-val">~{beh.estimatedAge} yrs</span>
+                    </div>
+                  </div>
+                )}
+                {(langLabel || fallbackLang) && (
+                  <div className="an-demo-chip">
+                    <Globe size={14} color="#71717a" />
+                    <div className="an-demo-chip-text">
+                      <span className="an-demo-key">Language</span>
+                      <span className="an-demo-val">{langLabel || fallbackLang}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Primary Emotion ── */}
+        <section className="an-card">
+          <div className="an-card-header">
+            <div className="an-card-icon">
+              <Smile size={16} color="#9f9fa9" />
+            </div>
+            <div>
+              <h2 className="an-card-title">Primary Emotion</h2>
+              <p className="an-card-sub">AI-generated emotional summary</p>
+            </div>
+          </div>
+          <div className="an-text-box">
+            <p className="an-body-text">{analysis.primary_emotion}</p>
+          </div>
+        </section>
+
+        {/* ── Detailed Analysis ── */}
+        <section className="an-card">
+          <button
+            className="an-expand-btn"
+            onClick={() => setShowDetailedAnalysis(v => !v)}
+          >
+            <div className="an-expand-left">
+              <div className="an-card-icon">
+                <Brain size={16} color="#9f9fa9" />
+              </div>
+              <div>
+                <span className="an-card-title">Detailed Analysis</span>
+                <p className="an-card-sub">Deep psychological interpretation</p>
+              </div>
+            </div>
+            {showDetailedAnalysis ? <ChevronUp size={18} color="#71717a" /> : <ChevronDown size={18} color="#71717a" />}
+          </button>
+
+          {showDetailedAnalysis && (
+            <div className="an-expand-body">
+              <div className="an-text-box">
+                <p className="an-body-text an-body-spaced">{analysis.detailed_analysis}</p>
+              </div>
+            </div>
           )}
         </section>
 
-        <section className="chat-section">
-          {!showChat ? (
-            <button
-              className="show-chat-btn"
-              onClick={() => setShowChat(true)}
-            >
-              <i className="fas fa-comments"></i> Chat with AI about this Analysis
-            </button>
-          ) : (
-            <>
-              <h2><i className="fas fa-comments"></i> AI Chat</h2>
-              <div className="chat-container">
-                <div className="chat-messages">
-                  {messages.length === 0 ? (
-                    <div className="chat-empty">
-                      <p>Ask me anything about this analysis!</p>
-                    </div>
-                  ) : (
-                    messages.map((msg, idx) => (
-                      <div key={idx} className={`chat-message ${msg.role}`}>
-                        <div className="message-content">{msg.content}</div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                <form onSubmit={sendChatMessage} className="chat-input-form">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Ask about the analysis..."
-                    disabled={sendingMessage}
-                  />
-                  <button type="submit" disabled={sendingMessage}>
-                    {sendingMessage ? (
-                      <i className="fas fa-spinner fa-spin"></i>
-                    ) : (
-                      <i className="fas fa-paper-plane"></i>
-                    )}
-                  </button>
-                </form>
+        {/* ── AI Chat ── */}
+        <section className="an-card">
+          <button
+            className="an-expand-btn"
+            onClick={() => setShowChat(v => !v)}
+          >
+            <div className="an-expand-left">
+              <div className="an-card-icon">
+                <MessageSquare size={16} color="#9f9fa9" />
               </div>
-            </>
+              <div>
+                <span className="an-card-title">Chat with AI</span>
+                <p className="an-card-sub">Ask questions about this analysis</p>
+              </div>
+            </div>
+            {showChat ? <ChevronUp size={18} color="#71717a" /> : <ChevronDown size={18} color="#71717a" />}
+          </button>
+
+          {showChat && (
+            <div className="an-expand-body">
+              <div className="an-chat-messages" id="chat-scroll">
+                {messages.length === 0 ? (
+                  <div className="an-chat-empty">
+                    <MessageSquare size={28} color="#3f3f46" />
+                    <p>Ask anything about this analysis</p>
+                  </div>
+                ) : (
+                  messages.map((msg, i) => (
+                    <div key={i} className={`an-msg an-msg-${msg.role}`}>
+                      {msg.role === 'assistant' && (
+                        <div className="an-msg-avatar">
+                          <Brain size={14} color="#60a5fa" />
+                        </div>
+                      )}
+                      <div className="an-msg-bubble">{msg.content}</div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <form className="an-chat-form" onSubmit={sendChatMessage}>
+                <input
+                  className="an-chat-input"
+                  type="text"
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  placeholder="Ask about the analysis…"
+                  disabled={sendingMessage}
+                />
+                <button className="an-chat-send" type="submit" disabled={sendingMessage || !newMessage.trim()}>
+                  {sendingMessage
+                    ? <Loader2 size={16} className="an-spin" />
+                    : <Send size={16} />}
+                </button>
+              </form>
+            </div>
           )}
         </section>
 
