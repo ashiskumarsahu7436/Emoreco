@@ -17,13 +17,6 @@ function getEmotionColor(emotion) {
   return EMOTION_COLORS[(emotion || '').toLowerCase()] || '#71717a'
 }
 
-function getSentimentScore(emotion) {
-  const e = (emotion || '').toLowerCase()
-  if (POSITIVE_EMOTIONS.has(e)) return 1
-  if (NEGATIVE_EMOTIONS.has(e)) return -1
-  return 0
-}
-
 function getTimeAgo(dateStr) {
   if (!dateStr) return '—'
   const diff = Date.now() - new Date(dateStr)
@@ -37,15 +30,6 @@ function getTimeAgo(dateStr) {
   if (days === 1) return 'Yesterday'
   if (days < 7) return `${days}d ago`
   return `${weeks}w ago`
-}
-
-function isThisWeek(dateStr) {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setDate(now.getDate() - now.getDay())
-  weekStart.setHours(0, 0, 0, 0)
-  return date >= weekStart
 }
 
 function isUpload(audioPath) {
@@ -104,20 +88,6 @@ export default function History() {
     } catch { alert('Failed to delete analysis') }
   }
 
-  const stats = useMemo(() => {
-    const total = analyses.length
-    const thisWeek = analyses.filter(a => isThisWeek(a.created_at)).length
-    const scores = analyses.map(a => getSentimentScore(a.primary_emotion))
-    const avgSentiment = total > 0 ? scores.reduce((s, v) => s + v, 0) / total : 0
-    const emotionCount = {}
-    analyses.forEach(a => {
-      const e = (a.primary_emotion || '').toLowerCase()
-      if (e) emotionCount[e] = (emotionCount[e] || 0) + 1
-    })
-    const topEmotion = Object.entries(emotionCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
-    return { total, thisWeek, avgSentiment, topEmotion }
-  }, [analyses])
-
   const filtered = useMemo(() => {
     let list = analyses
     if (search.trim()) {
@@ -140,11 +110,6 @@ export default function History() {
 
   const handleFilter = (f) => { setActiveFilter(f); setPage(1) }
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1) }
-
-  const fmtSentiment = (v) => {
-    if (v === 0) return '+0.00'
-    return (v >= 0 ? '+' : '') + v.toFixed(2)
-  }
 
   const capFirst = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
 
@@ -170,46 +135,6 @@ export default function History() {
             </svg>
             Filters
           </button>
-        </div>
-      </div>
-
-      {/* ── Stat cards ── */}
-      <div className="history-stats">
-        <div className="hstat-card">
-          <div className="hstat-top">
-            <span className="hstat-label">Total Analyses</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-          </div>
-          <div className="hstat-value">{stats.total}</div>
-        </div>
-        <div className="hstat-card">
-          <div className="hstat-top">
-            <span className="hstat-label">This Week</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-          </div>
-          <div className="hstat-value">{stats.thisWeek}</div>
-        </div>
-        <div className="hstat-card">
-          <div className="hstat-top">
-            <span className="hstat-label">Avg. Sentiment</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-            </svg>
-          </div>
-          <div className="hstat-value">{fmtSentiment(stats.avgSentiment)}</div>
-        </div>
-        <div className="hstat-card">
-          <div className="hstat-top">
-            <span className="hstat-label">Top Emotion</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9" strokeLinecap="round" strokeWidth="3"/><line x1="15" y1="9" x2="15.01" y2="9" strokeLinecap="round" strokeWidth="3"/>
-            </svg>
-          </div>
-          <div className="hstat-value hstat-emotion">{capFirst(stats.topEmotion)}</div>
         </div>
       </div>
 
