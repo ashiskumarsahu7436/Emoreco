@@ -227,6 +227,7 @@ export default function NewRecording() {
     try {
       const formData = new FormData()
       formData.append('audio', blob, `${title}.wav`)
+      formData.append('sourceType', 'mic')
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/analyses', formData, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }

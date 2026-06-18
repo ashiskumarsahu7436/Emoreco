@@ -8,13 +8,53 @@ const EMOTION_COLORS = {
   anxiety: '#ef4444', stress: '#ef4444', anger: '#dc2626',
   fear: '#8b5cf6', sadness: '#3b82f6', excitement: '#06b6d4',
   frustration: '#f97316', surprise: '#ec4899',
+  happy: '#22c55e', happiness: '#22c55e', angry: '#dc2626',
+  sad: '#3b82f6', fearful: '#8b5cf6', curious: '#06b6d4',
+  confused: '#f97316', hopeful: '#22c55e', worried: '#ef4444',
 }
 
-const POSITIVE_EMOTIONS = new Set(['joy', 'calm', 'excitement', 'surprise'])
-const NEGATIVE_EMOTIONS = new Set(['anxiety', 'stress', 'anger', 'fear', 'sadness', 'frustration'])
+const POSITIVE_TEXT_KEYWORDS = [
+  'joy', 'happy', 'happiness', 'calm', 'excited', 'excitement', 'hopeful',
+  'positive', 'pleased', 'delight', 'enthusiastic', 'optimistic', 'content',
+  'satisfied', 'peaceful', 'curious', 'confident', 'pride', 'grateful'
+]
+const NEGATIVE_TEXT_KEYWORDS = [
+  'sad', 'sadness', 'anxious', 'anxiety', 'stress', 'stressed', 'angry',
+  'anger', 'fear', 'fearful', 'frustrated', 'frustration', 'worried', 'worry',
+  'negative', 'depressed', 'upset', 'distressed', 'unhappy', 'distress',
+  'grief', 'despair', 'heavy', 'overwhelmed', 'tense', 'nervous'
+]
+
+function classifySentiment(analysis) {
+  const beh = analysis.hume_emotions
+  if (beh) {
+    const pos = (beh.dominantPositivity || '').toLowerCase()
+    if (pos === 'positive') return 'positive'
+    if (pos === 'negative') return 'negative'
+  }
+  const text = (analysis.primary_emotion || '').toLowerCase()
+  const isPos = POSITIVE_TEXT_KEYWORDS.some(k => text.includes(k))
+  const isNeg = NEGATIVE_TEXT_KEYWORDS.some(k => text.includes(k))
+  if (isPos && !isNeg) return 'positive'
+  if (isNeg && !isPos) return 'negative'
+  return 'neutral'
+}
+
+function isUpload(audioPath) {
+  if (!audioPath) return false
+  if (audioPath.startsWith('upload:')) return true
+  if (audioPath.startsWith('mic:')) return false
+  const name = audioPath.split('/').pop() || ''
+  return /\.(mp3|m4a|ogg|flac|aac|aiff|opus)$/i.test(name)
+}
 
 function getEmotionColor(emotion) {
-  return EMOTION_COLORS[(emotion || '').toLowerCase()] || '#71717a'
+  if (!emotion) return '#71717a'
+  const lower = (emotion || '').toLowerCase()
+  for (const [key, color] of Object.entries(EMOTION_COLORS)) {
+    if (lower.includes(key)) return color
+  }
+  return '#71717a'
 }
 
 function getTimeAgo(dateStr) {
@@ -32,16 +72,15 @@ function getTimeAgo(dateStr) {
   return `${weeks}w ago`
 }
 
-function isUpload(audioPath) {
-  if (!audioPath) return false
-  const name = audioPath.split('/').pop() || ''
-  return /\.(wav|mp3|m4a|ogg|flac)$/i.test(name)
-}
-
 function getDisplayName(analysis, index) {
-  if (!analysis.audio_path) return `Recording #${String(index + 1).padStart(3, '0')}`
-  const file = analysis.audio_path.split('/').pop()
-  return file || `Recording #${String(index + 1).padStart(3, '0')}`
+  const fallback = `Recording #${String(index + 1).padStart(3, '0')}`
+  if (!analysis.audio_path) return fallback
+  let path = analysis.audio_path
+  if (path.startsWith('mic:') || path.startsWith('upload:')) {
+    path = path.split(':').slice(1).join(':')
+  }
+  const file = path.split('/').pop()
+  return file || fallback
 }
 
 const PAGE_SIZE = 7
@@ -100,8 +139,8 @@ export default function History() {
     }
     if (activeFilter === 'Recordings') list = list.filter(a => !isUpload(a.audio_path))
     if (activeFilter === 'Uploads') list = list.filter(a => isUpload(a.audio_path))
-    if (activeFilter === 'Positive') list = list.filter(a => POSITIVE_EMOTIONS.has((a.primary_emotion || '').toLowerCase()))
-    if (activeFilter === 'Negative') list = list.filter(a => NEGATIVE_EMOTIONS.has((a.primary_emotion || '').toLowerCase()))
+    if (activeFilter === 'Positive') list = list.filter(a => classifySentiment(a) === 'positive')
+    if (activeFilter === 'Negative') list = list.filter(a => classifySentiment(a) === 'negative')
     return list
   }, [analyses, search, activeFilter])
 

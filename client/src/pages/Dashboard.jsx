@@ -96,6 +96,7 @@ function Dashboard() {
     try {
       const formData = new FormData()
       formData.append('audio', audioFile)
+      formData.append('sourceType', 'mic')
       if (selectedSpace) formData.append('spaceId', selectedSpace)
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/analyses', formData, {
@@ -130,6 +131,7 @@ function Dashboard() {
     try {
       const formData = new FormData()
       formData.append('audio', uploadFile)
+      formData.append('sourceType', 'upload')
       if (selectedSpace) formData.append('spaceId', selectedSpace)
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/analyses', formData, {

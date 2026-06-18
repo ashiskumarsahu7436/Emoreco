@@ -33,7 +33,8 @@ export const analyzeAudio = async (req, res) => {
     }
 
     audioPath = req.file.path
-    const { spaceId } = req.body
+    const { spaceId, sourceType } = req.body
+    const storedAudioPath = `${sourceType === 'upload' ? 'upload' : 'mic'}:${req.file.originalname || 'audio'}`
 
     console.log('Steps 1 & 2: Running Deepgram and Behavioral Signals in parallel...')
     const [transcriptionResult, behavioralResult] = await Promise.allSettled([
@@ -93,13 +94,17 @@ export const analyzeAudio = async (req, res) => {
     `, [
       req.user.userId,
       spaceId || null,
-      audioPath,
+      storedAudioPath,
       transcription.text,
       transcription.language || 'en',
       JSON.stringify(behavioral),
       primaryEmotion,
       detailedAnalysis
     ])
+
+    if (audioPath && fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath)
+    }
 
     res.json({
       analysisId: result.lastInsertRowid,
