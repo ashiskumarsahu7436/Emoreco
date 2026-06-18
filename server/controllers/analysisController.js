@@ -250,6 +250,9 @@ function parseBehavioralResults(results) {
   const strengthCounts = {}
   const engagementCounts = {}
   const speakingRateCounts = {}
+  const genderCounts = {}
+  const languageCounts = {}
+  const ageSamples = []
   let hesitationCount = 0
   const asrParts = []
 
@@ -263,6 +266,9 @@ function parseBehavioralResults(results) {
     const speakingRate = get('speaking_rate')
     const hesitation = get('hesitation')
     const asr = get('asr')
+    const gender = get('gender')
+    const language = get('language')
+    const age = get('age')
 
     if (emotion) emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1
     if (positivity) positivityCounts[positivity] = (positivityCounts[positivity] || 0) + 1
@@ -271,27 +277,36 @@ function parseBehavioralResults(results) {
     if (speakingRate) speakingRateCounts[speakingRate] = (speakingRateCounts[speakingRate] || 0) + 1
     if (hesitation === 'yes') hesitationCount++
     if (asr) asrParts.push(asr)
+    if (gender) genderCounts[gender] = (genderCounts[gender] || 0) + 1
+    if (language) languageCounts[language] = (languageCounts[language] || 0) + 1
+    if (age) ageSamples.push(age)
   }
 
   const dominant = (counts) =>
-    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'unknown'
+    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
 
   const dominantEmotion = dominant(emotionCounts)
   const dominantPositivity = dominant(positivityCounts)
   const dominantArousal = dominant(strengthCounts)
   const dominantEngagement = dominant(engagementCounts)
   const dominantSpeakingRate = dominant(speakingRateCounts)
+  const detectedGender = dominant(genderCounts)
+  const detectedLanguage = dominant(languageCounts)
   const hesitationDetected = hesitationCount > 0
   const asrTranscription = asrParts.join(' ').trim()
 
+  const estimatedAge = ageSamples.length > 0
+    ? Math.round(ageSamples.reduce((a, b) => parseFloat(a) + parseFloat(b), 0) / ageSamples.length)
+    : null
+
   const summary = [
-    `Dominant emotion: ${dominantEmotion}`,
-    `Emotional positivity: ${dominantPositivity}`,
-    `Arousal/energy level: ${dominantArousal}`,
-    `Engagement level: ${dominantEngagement}`,
-    `Speaking rate: ${dominantSpeakingRate}`,
+    dominantEmotion ? `Dominant emotion: ${dominantEmotion}` : null,
+    dominantPositivity ? `Emotional positivity: ${dominantPositivity}` : null,
+    dominantArousal ? `Arousal/energy level: ${dominantArousal}` : null,
+    dominantEngagement ? `Engagement level: ${dominantEngagement}` : null,
+    dominantSpeakingRate ? `Speaking rate: ${dominantSpeakingRate}` : null,
     hesitationDetected ? 'Hesitation detected in speech' : 'No hesitation detected'
-  ].join(', ')
+  ].filter(Boolean).join(', ')
 
   return {
     dominantEmotion,
@@ -301,6 +316,9 @@ function parseBehavioralResults(results) {
     dominantSpeakingRate,
     hesitationDetected,
     asrTranscription,
+    detectedGender,
+    detectedLanguage,
+    estimatedAge,
     summary
   }
 }

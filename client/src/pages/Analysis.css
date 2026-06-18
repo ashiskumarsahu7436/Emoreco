@@ -50,7 +50,9 @@
 .transcription-section,
 .primary-emotion-section,
 .detailed-analysis-section,
-.chat-section {
+.chat-section,
+.voice-profile-section,
+.demographics-section {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -61,13 +63,22 @@
 .transcription-section h2,
 .primary-emotion-section h2,
 .detailed-analysis-section h2,
-.chat-section h2 {
+.chat-section h2,
+.voice-profile-section h2,
+.demographics-section h2 {
   font-size: 1.5rem;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
   color: var(--accent);
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.section-subtitle {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 24px;
+  margin-top: 0;
 }
 
 .content-box {
@@ -81,6 +92,126 @@
   white-space: pre-wrap;
 }
 
+/* ── Voice Profile Section ── */
+.voice-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.metric-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent-color, #6C63FF);
+  border-radius: 16px 16px 0 0;
+}
+
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.metric-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.metric-value {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.energy-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.energy-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+/* ── Demographics Section ── */
+.demographics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.demo-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50px;
+  padding: 12px 20px;
+  transition: background 0.2s;
+}
+
+.demo-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.demo-icon {
+  font-size: 1.4rem;
+}
+
+.demo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.demo-key {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.demo-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--light);
+}
+
+/* ── Existing styles ── */
 .show-analysis-btn,
 .show-chat-btn {
   width: 100%;
@@ -222,5 +353,19 @@
 
   .chat-message {
     max-width: 90%;
+  }
+
+  .voice-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .demographics-row {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .voice-metrics-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
