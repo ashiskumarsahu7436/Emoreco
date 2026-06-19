@@ -3,6 +3,44 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import './Dashboard.css'
 
+async function convertToWav(audioBlob) {
+  const arrayBuffer = await audioBlob.arrayBuffer()
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+  await audioCtx.close()
+
+  const sampleRate = audioBuffer.sampleRate
+  const length = audioBuffer.length
+
+  const monoData = new Float32Array(length)
+  for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    const channelData = audioBuffer.getChannelData(ch)
+    for (let i = 0; i < length; i++) {
+      monoData[i] += channelData[i] / audioBuffer.numberOfChannels
+    }
+  }
+
+  const wavBuffer = new ArrayBuffer(44 + length * 2)
+  const view = new DataView(wavBuffer)
+  const write = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)) }
+
+  write(0, 'RIFF');  view.setUint32(4, 36 + length * 2, true)
+  write(8, 'WAVE'); write(12, 'fmt ')
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true);  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true); write(36, 'data')
+  view.setUint32(40, length * 2, true)
+
+  let off = 44
+  for (let i = 0; i < length; i++) {
+    const s = Math.max(-1, Math.min(1, monoData[i]))
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+    off += 2
+  }
+  return new Blob([wavBuffer], { type: 'audio/wav' })
+}
+
 function Dashboard() {
   const navigate = useNavigate()
   const [showRecordModal, setShowRecordModal] = useState(false)
@@ -104,10 +142,9 @@ function Dashboard() {
     if (!audioFile) return
     setLoading(true)
     try {
-      const mime = mimeTypeRef.current || 'audio/webm'
-      const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
+      const wavBlob = await convertToWav(audioFile)
       const formData = new FormData()
-      formData.append('audio', audioFile, `recording.${ext}`)
+      formData.append('audio', wavBlob, 'recording.wav')
       formData.append('sourceType', 'mic')
       if (selectedSpace) formData.append('spaceId', selectedSpace)
       const token = localStorage.getItem('token')
