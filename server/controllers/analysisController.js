@@ -159,19 +159,27 @@ async function analyzeBehavioralSignals(audioPath) {
   try {
     const audioBuffer = fs.readFileSync(audioPath)
     const filename = path.basename(audioPath)
+    const fileSize = audioBuffer.length
 
-    const blob = new Blob([audioBuffer])
+    const ext = path.extname(filename).toLowerCase()
+    const mimeType = ext === '.mp3' ? 'audio/mpeg'
+      : ext === '.m4a' ? 'audio/mp4'
+      : ext === '.ogg' ? 'audio/ogg'
+      : ext === '.webm' ? 'audio/webm'
+      : 'audio/wav'
+
+    const blob = new Blob([audioBuffer], { type: mimeType })
     const form = new FormData()
-    form.append('audio', blob, filename)
+    form.append('file', blob, filename)
     form.append('name', 'emoreco-analysis')
     form.append('embeddings', 'false')
 
-    console.log('  → Submitting audio to Behavioral Signals...')
+    console.log(`  → Submitting audio to Behavioral Signals: ${filename} (${fileSize} bytes, ${mimeType})`)
     const submitRes = await fetch(
       `https://api.behavioralsignals.com/v5/clients/${cid}/processes/audio`,
       {
         method: 'POST',
-        headers: { 'X-Auth-Token': token },
+        headers: { 'X-Auth-Token': token, 'accept': 'application/json' },
         body: form
       }
     )
@@ -270,7 +278,9 @@ function parseBehavioralResults(results) {
     const engagement = get('engagement')
     const speakingRate = get('speaking_rate')
     const hesitation = get('hesitation')
-    const asr = get('asr')
+    const asr = typeof utterance.asr === 'string'
+      ? utterance.asr
+      : (utterance.asr?.finalLabel || utterance.asr?.label || null)
     const gender = get('gender')
     const language = get('language')
     const age = get('age')
