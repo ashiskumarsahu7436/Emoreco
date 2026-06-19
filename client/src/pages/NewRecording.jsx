@@ -21,6 +21,7 @@ export default function NewRecording() {
   const streamRef = useRef(null)
   const timerRef = useRef(null)
   const audioCtxRef = useRef(null)
+  const mimeTypeRef = useRef('audio/webm')
 
   const [phase, setPhase] = useState('idle') // idle | recording | paused | stopped
   const [elapsed, setElapsed] = useState(0)
@@ -154,13 +155,24 @@ export default function NewRecording() {
       source.connect(analyser)
       analyserRef.current = analyser
 
+      // Detect the actual MIME type the browser supports
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4',
+      ]
+      const supportedMime = preferredTypes.find(t => MediaRecorder.isTypeSupported(t)) || ''
+      mimeTypeRef.current = supportedMime || 'audio/webm'
+
       // MediaRecorder
-      const mr = new MediaRecorder(stream)
+      const mr = new MediaRecorder(stream, supportedMime ? { mimeType: supportedMime } : {})
       mediaRecorderRef.current = mr
       audioChunksRef.current = []
       mr.ondataavailable = e => audioChunksRef.current.push(e.data)
       mr.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        const blob = new Blob(audioChunksRef.current, { type: mimeTypeRef.current })
         setAudioFile(blob)
       }
       mr.start()
@@ -221,12 +233,14 @@ export default function NewRecording() {
   }
 
   const submitAnalysis = async () => {
-    const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+    const mime = mimeTypeRef.current || 'audio/webm'
+    const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
+    const blob = new Blob(audioChunksRef.current, { type: mime })
     if (!blob.size) return
     setLoading(true)
     try {
       const formData = new FormData()
-      formData.append('audio', blob, `${title}.wav`)
+      formData.append('audio', blob, `${title}.${ext}`)
       formData.append('sourceType', 'mic')
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/analyses', formData, {
