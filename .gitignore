@@ -10,3 +10,6 @@ build/
 package-lock.json
 uploads/
 .vite/
+*.zip
+.replit
+replit.nix

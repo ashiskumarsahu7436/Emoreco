@@ -33,17 +33,32 @@ export const analyzeAudio = async (req, res) => {
     }
 
     audioPath = req.file.path
-    const { spaceId } = req.body
+    const { spaceId, sourceType } = req.body
+    const storedAudioPath = `${sourceType === 'upload' ? 'upload' : 'mic'}:${req.file.originalname || 'audio'}`
 
-    console.log('Step 1: Transcribing audio with Deepgram...')
-    const transcription = await transcribeAudio(audioPath)
+    const originalFilename = req.file.originalname || 'audio.wav'
+    console.log('Steps 1 & 2: Running Deepgram and Behavioral Signals in parallel...')
+    const [transcriptionResult, behavioralResult] = await Promise.allSettled([
+      transcribeAudio(audioPath),
+      analyzeBehavioralSignals(audioPath, originalFilename)
+    ])
+
+    const transcription = transcriptionResult.status === 'fulfilled'
+      ? transcriptionResult.value
+      : null
 
     if (!transcription) {
+      console.error('Transcription failed:', transcriptionResult.reason)
       return res.status(500).json({ error: 'Transcription failed' })
     }
 
-    console.log('Step 2: Analyzing emotions with Hume AI...')
-    const emotions = await analyzeEmotions(audioPath)
+    const behavioral = behavioralResult.status === 'fulfilled'
+      ? behavioralResult.value
+      : { summary: 'Behavioral analysis unavailable', asrTranscription: '' }
+
+    if (behavioralResult.status === 'rejected') {
+      console.error('Behavioral Signals error:', behavioralResult.reason)
+    }
 
     console.log('Step 3: Getting space history...')
     let spaceHistory = []
@@ -60,14 +75,14 @@ export const analyzeAudio = async (req, res) => {
     console.log('Step 4: Generating Primary Emotion analysis...')
     const primaryEmotion = await generatePrimaryEmotion(
       transcription.text,
-      emotions,
+      behavioral,
       spaceHistory
     )
 
     console.log('Step 5: Generating Detailed Analysis...')
     const detailedAnalysis = await generateDetailedAnalysis(
       transcription.text,
-      emotions,
+      behavioral,
       primaryEmotion,
       spaceHistory
     )
@@ -80,13 +95,17 @@ export const analyzeAudio = async (req, res) => {
     `, [
       req.user.userId,
       spaceId || null,
-      audioPath,
+      storedAudioPath,
       transcription.text,
       transcription.language || 'en',
-      JSON.stringify(emotions),
+      JSON.stringify(behavioral),
       primaryEmotion,
       detailedAnalysis
     ])
+
+    if (audioPath && fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath)
+    }
 
     res.json({
       analysisId: result.lastInsertRowid,
@@ -129,70 +148,238 @@ async function transcribeAudio(audioPath) {
   }
 }
 
-async function analyzeEmotions(audioPath) {
+async function analyzeBehavioralSignals(audioPath, originalFilename) {
+  const cid = process.env.BEHAVIORAL_SIGNALS_CID
+  const token = process.env.BEHAVIORAL_SIGNALS_TOKEN
+
+  if (!cid || !token) {
+    console.warn('Behavioral Signals credentials not configured, skipping emotion analysis')
+    return { summary: 'Emotion analysis not configured', asrTranscription: '' }
+  }
+
   try {
     const audioBuffer = fs.readFileSync(audioPath)
-    const base64Audio = audioBuffer.toString('base64')
+    const filename = originalFilename || path.basename(audioPath)
+    const fileSize = audioBuffer.length
 
-    const response = await axios.post(
-      'https://api.hume.ai/v0/batch/jobs',
+    const ext = path.extname(filename).toLowerCase()
+    const mimeType = ext === '.mp3' ? 'audio/mpeg'
+      : ext === '.m4a' ? 'audio/mp4'
+      : ext === '.ogg' ? 'audio/ogg'
+      : ext === '.webm' ? 'audio/webm'
+      : 'audio/wav'
+
+    const blob = new Blob([audioBuffer], { type: mimeType })
+    const form = new FormData()
+    form.append('file', blob, filename)
+    form.append('name', 'emoreco-analysis')
+    form.append('embeddings', 'false')
+
+    console.log(`  → Submitting audio to Behavioral Signals: ${filename} (${fileSize} bytes, ${mimeType})`)
+    const submitRes = await fetch(
+      `https://api.behavioralsignals.com/v5/clients/${cid}/processes/audio`,
       {
-        models: { prosody: {} },
-        files: [{
-          filename: 'audio.wav',
-          content_type: 'audio/wav',
-          data: base64Audio
-        }]
-      },
-      {
-        headers: {
-          'X-Hume-Api-Key': process.env.HUME_API_KEY,
-          'Content-Type': 'application/json'
-        }
+        method: 'POST',
+        headers: { 'X-Auth-Token': token, 'accept': 'application/json' },
+        body: form
       }
     )
 
-    const jobId = response.data.job_id
-    await new Promise(resolve => setTimeout(resolve, 5000))
+    if (!submitRes.ok) {
+      const errText = await submitRes.text()
+      throw new Error(`Behavioral Signals submit failed: ${submitRes.status} ${errText}`)
+    }
 
-    const resultResponse = await axios.get(
-      `https://api.hume.ai/v0/batch/jobs/${jobId}/predictions`,
-      { headers: { 'X-Hume-Api-Key': process.env.HUME_API_KEY } }
+    const submitData = await submitRes.json()
+    const pid = submitData.pid
+
+    if (!pid) {
+      throw new Error('No process ID returned from Behavioral Signals')
+    }
+
+    console.log(`  → Submitted. Process ID: ${pid}. Polling for completion...`)
+
+    const maxAttempts = 40
+    const pollInterval = 4000
+    let status = 0
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+
+      const pollRes = await fetch(
+        `https://api.behavioralsignals.com/v5/clients/${cid}/processes/${pid}`,
+        { headers: { 'X-Auth-Token': token, 'accept': 'application/json' } }
+      )
+
+      if (!pollRes.ok) {
+        throw new Error(`Behavioral Signals poll failed: ${pollRes.status}`)
+      }
+
+      const pollData = await pollRes.json()
+      status = pollData.status
+
+      console.log(`  → Poll ${attempt + 1}: status ${status} (${pollData.statusmsg})`)
+
+      if (status === 2) {
+        break
+      }
+      if (status === -2) {
+        throw new Error('Behavioral Signals: insufficient credits')
+      }
+      if (status === -1 || status === -3) {
+        throw new Error(`Behavioral Signals: server error (status ${status})`)
+      }
+    }
+
+    if (status !== 2) {
+      throw new Error('Behavioral Signals: processing timed out')
+    }
+
+    console.log('  → Processing complete. Fetching results...')
+    const resultsRes = await fetch(
+      `https://api.behavioralsignals.com/v5/clients/${cid}/processes/${pid}/results`,
+      { headers: { 'X-Auth-Token': token, 'accept': 'application/json' } }
     )
 
-    const predictions = resultResponse.data[0]?.results?.predictions?.[0]?.models?.prosody?.grouped_predictions
-
-    if (!predictions || predictions.length === 0) {
-      return { summary: 'Neutral emotional state' }
+    if (!resultsRes.ok) {
+      throw new Error(`Behavioral Signals results fetch failed: ${resultsRes.status}`)
     }
 
-    const topEmotions = predictions[0].predictions
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-
-    return {
-      topEmotions,
-      summary: topEmotions.map(e => e.name).join(', ')
-    }
+    const results = await resultsRes.json()
+    return parseBehavioralResults(results)
 
   } catch (err) {
-    console.error('Hume AI error:', err.response?.data || err.message)
-    return { summary: 'Unable to detect emotions, using text analysis' }
+    console.error('Behavioral Signals error:', err.message)
+    return { summary: 'Unable to detect emotions from voice', asrTranscription: '' }
   }
 }
 
-async function generatePrimaryEmotion(transcription, emotions, spaceHistory) {
-  const prompt = `You are an expert emotion analyst. Based on the voice analysis and transcription, provide a 2-3 sentence summary of the PRIMARY EMOTION the person was feeling while speaking.
+function parseBehavioralResults(results) {
+  if (!results || !Array.isArray(results) || results.length === 0) {
+    return { summary: 'No behavioral data returned', asrTranscription: '' }
+  }
 
-Transcription: "${transcription}"
+  const emotionCounts = {}
+  const positivityCounts = {}
+  const strengthCounts = {}
+  const engagementCounts = {}
+  const speakingRateCounts = {}
+  const genderCounts = {}
+  const languageCounts = {}
+  const ageCounts = {}
+  const speakerCounts = {}
+  let hesitationCount = 0
+  let utteranceCount = 0
+  const asrParts = []
 
-Voice Emotion Data: ${emotions.summary}
+  for (const entry of results) {
+    if (entry.level !== 'utterance') continue
+    const label = entry.finalLabel
+    if (!label) continue
+
+    switch (entry.task) {
+      case 'asr':
+        asrParts.push(label.trim())
+        utteranceCount++
+        break
+      case 'emotion':
+        emotionCounts[label] = (emotionCounts[label] || 0) + 1
+        break
+      case 'positivity':
+        positivityCounts[label] = (positivityCounts[label] || 0) + 1
+        break
+      case 'strength':
+        strengthCounts[label] = (strengthCounts[label] || 0) + 1
+        break
+      case 'engagement':
+        engagementCounts[label] = (engagementCounts[label] || 0) + 1
+        break
+      case 'speaking_rate':
+        speakingRateCounts[label] = (speakingRateCounts[label] || 0) + 1
+        break
+      case 'hesitation':
+        if (label === 'yes') hesitationCount++
+        break
+      case 'gender':
+        genderCounts[label] = (genderCounts[label] || 0) + 1
+        break
+      case 'language':
+        languageCounts[label] = (languageCounts[label] || 0) + 1
+        break
+      case 'age':
+        ageCounts[label] = (ageCounts[label] || 0) + 1
+        break
+      case 'diarization':
+        speakerCounts[label] = (speakerCounts[label] || 0) + 1
+        break
+    }
+  }
+
+  const dominant = (counts) =>
+    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+
+  const dominantEmotion = dominant(emotionCounts)
+  const dominantPositivity = dominant(positivityCounts)
+  const dominantArousal = dominant(strengthCounts)
+  const dominantEngagement = dominant(engagementCounts)
+  const dominantSpeakingRate = dominant(speakingRateCounts)
+  const detectedGender = dominant(genderCounts)
+  const detectedLanguage = dominant(languageCounts)
+  const hesitationDetected = hesitationCount > 0
+  const asrTranscription = asrParts.join(' ').trim()
+  const estimatedAge = dominant(ageCounts)
+  const dominantSpeaker = dominant(speakerCounts)
+
+  const summary = [
+    dominantEmotion ? `Dominant emotion: ${dominantEmotion}` : null,
+    dominantPositivity ? `Emotional positivity: ${dominantPositivity}` : null,
+    dominantArousal ? `Arousal/energy level: ${dominantArousal}` : null,
+    dominantEngagement ? `Engagement level: ${dominantEngagement}` : null,
+    dominantSpeakingRate ? `Speaking rate: ${dominantSpeakingRate}` : null,
+    hesitationDetected ? 'Hesitation detected in speech' : 'No hesitation detected'
+  ].filter(Boolean).join(', ')
+
+  return {
+    dominantEmotion,
+    dominantPositivity,
+    dominantArousal,
+    dominantEngagement,
+    dominantSpeakingRate,
+    hesitationDetected,
+    asrTranscription,
+    detectedGender,
+    detectedLanguage,
+    estimatedAge,
+    dominantSpeaker,
+    summary
+  }
+}
+
+async function generatePrimaryEmotion(deepgramTranscript, behavioral, spaceHistory) {
+  const bsTranscript = behavioral.asrTranscription
+    ? `\nBehavioral Signals Transcription (cross-reference): "${behavioral.asrTranscription}"`
+    : ''
+
+  const prompt = `You are an expert emotion analyst. Based on the voice analysis and transcription data, provide a 2-3 sentence summary of the PRIMARY EMOTION the person was feeling while speaking.
+
+Deepgram Transcription: "${deepgramTranscript}"${bsTranscript}
+
+Voice Behavioral Analysis:
+- Dominant Emotion: ${behavioral.dominantEmotion || 'unknown'}
+- Sentiment: ${behavioral.dominantPositivity || 'unknown'}
+- Vocal Strength / Arousal: ${behavioral.dominantArousal || 'unknown'}
+- Speaking Rate: ${behavioral.dominantSpeakingRate || 'unknown'}
+- Hesitation Detected: ${behavioral.hesitationDetected ? 'Yes' : 'No'}
+- Speaker Gender: ${behavioral.detectedGender || 'unknown'}
+- Estimated Age Range: ${behavioral.estimatedAge || 'unknown'}
+- Detected Language: ${behavioral.detectedLanguage || 'unknown'}
 
 ${spaceHistory.length > 0 ? `Previous analyses of this person:\n${spaceHistory.map((h, i) => `${i + 1}. ${h.primary_emotion}`).join('\n')}` : ''}
 
 Instructions:
 - Write ONLY 2-3 sentences
 - Focus on what emotion the person was FEELING while speaking
+- Use the voice behavioral data as primary evidence
 - Be specific and clear
 - DO NOT use percentages or confidence scores
 - DO NOT mention "transcription" or "voice data"
@@ -215,12 +402,24 @@ Primary Emotion:`
   }
 }
 
-async function generateDetailedAnalysis(transcription, emotions, primaryEmotion, spaceHistory) {
+async function generateDetailedAnalysis(deepgramTranscript, behavioral, primaryEmotion, spaceHistory) {
+  const bsTranscript = behavioral.asrTranscription
+    ? `\nBehavioral Signals Transcription (cross-reference): "${behavioral.asrTranscription}"`
+    : ''
+
   const prompt = `You are an expert psychologist and emotion analyst. Provide a detailed analysis of what the person said and meant.
 
-Transcription: "${transcription}"
+Deepgram Transcription: "${deepgramTranscript}"${bsTranscript}
 
-Voice Emotions Detected: ${emotions.summary}
+Voice Behavioral Analysis:
+- Dominant Emotion: ${behavioral.dominantEmotion || 'unknown'}
+- Sentiment: ${behavioral.dominantPositivity || 'unknown'}
+- Vocal Strength / Arousal: ${behavioral.dominantArousal || 'unknown'}
+- Speaking Rate: ${behavioral.dominantSpeakingRate || 'unknown'}
+- Hesitation in speech: ${behavioral.hesitationDetected ? 'Yes' : 'No'}
+- Speaker Gender: ${behavioral.detectedGender || 'unknown'}
+- Estimated Age Range: ${behavioral.estimatedAge || 'unknown'}
+- Detected Language: ${behavioral.detectedLanguage || 'unknown'}
 
 Primary Emotion: ${primaryEmotion}
 
@@ -229,9 +428,10 @@ ${spaceHistory.length > 0 ? `\nPrevious personality insights about this person:\
 Instructions:
 Write a SINGLE PARAGRAPH analysis that covers:
 1. What the person actually said (verbatim summary)
-2. What emotions they were feeling while saying it
-3. What each line/statement really means - the deeper meaning behind their words
+2. What emotions they were feeling while saying it — grounded in the voice behavioral data
+3. What each line/statement really means — the deeper meaning behind their words
 4. What they truly want to express or communicate
+5. Notable vocal patterns (hesitation, energy, engagement) and what they reveal
 
 ${spaceHistory.length > 0 ? 'Use the previous analyses to provide deeper personality insights and patterns.' : ''}
 
@@ -250,7 +450,7 @@ Detailed Analysis:`
     return completion.choices[0].message.content.trim()
   } catch (err) {
     console.error('Groq error (detailed):', err)
-    return `The speaker said: "${transcription}". Based on the voice analysis showing ${emotions.summary}, they appear to be expressing their thoughts in a straightforward manner.`
+    return `The speaker said: "${deepgramTranscript}". Based on the voice analysis showing ${behavioral.summary}, they appear to be expressing their thoughts in a straightforward manner.`
   }
 }
 
@@ -270,18 +470,32 @@ export const chatWithAI = async (req, res) => {
 
     const chatHistory = analysis.chat_history ? JSON.parse(analysis.chat_history) : []
 
+    const beh = analysis.hume_emotions || {}
+    const voiceProfile = [
+      beh.dominantEmotion    ? `Emotion: ${beh.dominantEmotion}` : null,
+      beh.dominantPositivity ? `Sentiment: ${beh.dominantPositivity}` : null,
+      beh.dominantArousal    ? `Vocal Strength: ${beh.dominantArousal}` : null,
+      beh.dominantSpeakingRate ? `Speaking Rate: ${beh.dominantSpeakingRate}` : null,
+      beh.hesitationDetected !== undefined ? `Hesitation: ${beh.hesitationDetected ? 'Yes' : 'No'}` : null,
+      beh.detectedGender     ? `Gender: ${beh.detectedGender}` : null,
+      beh.estimatedAge       ? `Age Range: ${beh.estimatedAge}` : null,
+      beh.detectedLanguage   ? `Language: ${beh.detectedLanguage}` : null,
+      beh.dominantSpeaker    ? `Speaker: ${beh.dominantSpeaker}` : null,
+    ].filter(Boolean).join('\n')
+
     const contextPrompt = `You are an expert emotion analyst. The user is asking about this emotion analysis:
 
 Transcription: "${analysis.transcription}"
 Primary Emotion: ${analysis.primary_emotion}
 Detailed Analysis: ${analysis.detailed_analysis}
+${voiceProfile ? `\nVoice Profile:\n${voiceProfile}` : ''}
 
 Previous conversation:
 ${chatHistory.map(m => `${m.role}: ${m.content}`).join('\n')}
 
 User question: ${message}
 
-Provide a helpful, insightful answer based on the analysis.`
+Provide a helpful, insightful answer based on the analysis and voice profile data.`
 
     const groq = getGroqClient()
     const completion = await groq.chat.completions.create({
