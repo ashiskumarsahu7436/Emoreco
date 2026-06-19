@@ -5,6 +5,44 @@ import './NewRecording.css'
 
 const LANGUAGES = ['English (US)', 'English (UK)', 'Spanish', 'French', 'German', 'Portuguese', 'Italian', 'Japanese', 'Chinese']
 
+async function convertToWav(audioBlob) {
+  const arrayBuffer = await audioBlob.arrayBuffer()
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+  await audioCtx.close()
+
+  const sampleRate = audioBuffer.sampleRate
+  const length = audioBuffer.length
+
+  const monoData = new Float32Array(length)
+  for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    const channelData = audioBuffer.getChannelData(ch)
+    for (let i = 0; i < length; i++) {
+      monoData[i] += channelData[i] / audioBuffer.numberOfChannels
+    }
+  }
+
+  const wavBuffer = new ArrayBuffer(44 + length * 2)
+  const view = new DataView(wavBuffer)
+  const write = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)) }
+
+  write(0, 'RIFF');  view.setUint32(4, 36 + length * 2, true)
+  write(8, 'WAVE'); write(12, 'fmt ')
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true);  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true); write(36, 'data')
+  view.setUint32(40, length * 2, true)
+
+  let off = 44
+  for (let i = 0; i < length; i++) {
+    const s = Math.max(-1, Math.min(1, monoData[i]))
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+    off += 2
+  }
+  return new Blob([wavBuffer], { type: 'audio/wav' })
+}
+
 function formatTime(secs) {
   const m = String(Math.floor(secs / 60)).padStart(2, '0')
   const s = String(secs % 60).padStart(2, '0')
@@ -234,13 +272,13 @@ export default function NewRecording() {
 
   const submitAnalysis = async () => {
     const mime = mimeTypeRef.current || 'audio/webm'
-    const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
-    const blob = new Blob(audioChunksRef.current, { type: mime })
-    if (!blob.size) return
+    const rawBlob = new Blob(audioChunksRef.current, { type: mime })
+    if (!rawBlob.size) return
     setLoading(true)
     try {
+      const wavBlob = await convertToWav(rawBlob)
       const formData = new FormData()
-      formData.append('audio', blob, `${title}.${ext}`)
+      formData.append('audio', wavBlob, `${title}.wav`)
       formData.append('sourceType', 'mic')
       const token = localStorage.getItem('token')
       const res = await axios.post('/api/analyses', formData, {
