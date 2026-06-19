@@ -106,6 +106,7 @@ function Analysis() {
 
   const EMOTION_MAP = {
     angry:   { emoji: '😠', label: 'Angry',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)' },
+    happy:   { emoji: '😊', label: 'Happy',   color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   border: 'rgba(34,197,94,0.25)' },
     heavy:   { emoji: '😔', label: 'Heavy',   color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.25)' },
     sad:     { emoji: '😢', label: 'Sad',     color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.25)' },
     neutral: { emoji: '😐', label: 'Neutral', color: '#9f9fa9', bg: 'rgba(159,159,169,0.1)', border: 'rgba(159,159,169,0.25)' },
@@ -154,7 +155,7 @@ function Analysis() {
 
   const beh = analysis.hume_emotions || {}
   const hasBeh = beh.dominantEmotion || beh.dominantPositivity || beh.dominantArousal
-  const hasDemo = beh.detectedGender || beh.estimatedAge || beh.detectedLanguage
+  const hasDemo = beh.detectedGender || beh.estimatedAge || beh.detectedLanguage || beh.dominantSpeaker
 
   const emotion     = EMOTION_MAP[beh.dominantEmotion?.toLowerCase()] || null
   const positivity  = POSITIVITY_MAP[beh.dominantPositivity?.toLowerCase()] || null
@@ -226,7 +227,7 @@ function Analysis() {
                   <span className="an-metric-emoji">
                     {positivity.label === 'Positive' ? '😊' : positivity.label === 'Negative' ? '😟' : '😶'}
                   </span>
-                  <span className="an-metric-key">Tone</span>
+                  <span className="an-metric-key">Sentiment</span>
                   <span className="an-metric-val">{positivity.label}</span>
                 </div>
               )}
@@ -235,22 +236,12 @@ function Analysis() {
                 <div className="an-metric an-metric-wide" style={{ '--m-color': arousal.color, '--m-bg': 'rgba(255,255,255,0.03)', '--m-border': 'rgba(255,255,255,0.08)' }}>
                   <div className="an-metric-row">
                     <Zap size={14} color={arousal.color} />
-                    <span className="an-metric-key">Energy Level</span>
+                    <span className="an-metric-key">Vocal Strength</span>
                     <span className="an-metric-val" style={{ color: arousal.color, marginLeft: 'auto' }}>{arousal.label}</span>
                   </div>
                   <div className="an-energy-track">
                     <div className="an-energy-fill" style={{ width: `${arousal.pct}%`, background: arousal.color }} />
                   </div>
-                </div>
-              )}
-
-              {engagement && (
-                <div className="an-metric" style={{ '--m-color': engagement.color, '--m-bg': 'rgba(255,255,255,0.03)', '--m-border': 'rgba(255,255,255,0.08)' }}>
-                  <span className="an-metric-emoji">
-                    {engagement.label === 'Engaged' ? '🎯' : engagement.label === 'Withdrawn' ? '🚶' : '😶'}
-                  </span>
-                  <span className="an-metric-key">Engagement</span>
-                  <span className="an-metric-val" style={{ color: engagement.color }}>{engagement.label}</span>
                 </div>
               )}
 
@@ -288,6 +279,15 @@ function Analysis() {
             <div className="an-demo-content">
               <h2 className="an-card-title">Speaker Profile</h2>
               <div className="an-demo-chips">
+                {beh.dominantSpeaker && (
+                  <div className="an-demo-chip">
+                    <span>🎙️</span>
+                    <div className="an-demo-chip-text">
+                      <span className="an-demo-key">Speaker</span>
+                      <span className="an-demo-val">{beh.dominantSpeaker}</span>
+                    </div>
+                  </div>
+                )}
                 {beh.detectedGender && (
                   <div className="an-demo-chip">
                     <span>{beh.detectedGender.toLowerCase() === 'female' ? '👩' : '👨'}</span>
@@ -301,8 +301,8 @@ function Analysis() {
                   <div className="an-demo-chip">
                     <Calendar size={14} color="#71717a" />
                     <div className="an-demo-chip-text">
-                      <span className="an-demo-key">Est. Age</span>
-                      <span className="an-demo-val">~{beh.estimatedAge} yrs</span>
+                      <span className="an-demo-key">Age Range</span>
+                      <span className="an-demo-val">{beh.estimatedAge}</span>
                     </div>
                   </div>
                 )}

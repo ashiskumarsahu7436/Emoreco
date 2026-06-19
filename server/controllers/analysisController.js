@@ -36,10 +36,11 @@ export const analyzeAudio = async (req, res) => {
     const { spaceId, sourceType } = req.body
     const storedAudioPath = `${sourceType === 'upload' ? 'upload' : 'mic'}:${req.file.originalname || 'audio'}`
 
+    const originalFilename = req.file.originalname || 'audio.wav'
     console.log('Steps 1 & 2: Running Deepgram and Behavioral Signals in parallel...')
     const [transcriptionResult, behavioralResult] = await Promise.allSettled([
       transcribeAudio(audioPath),
-      analyzeBehavioralSignals(audioPath)
+      analyzeBehavioralSignals(audioPath, originalFilename)
     ])
 
     const transcription = transcriptionResult.status === 'fulfilled'
@@ -147,7 +148,7 @@ async function transcribeAudio(audioPath) {
   }
 }
 
-async function analyzeBehavioralSignals(audioPath) {
+async function analyzeBehavioralSignals(audioPath, originalFilename) {
   const cid = process.env.BEHAVIORAL_SIGNALS_CID
   const token = process.env.BEHAVIORAL_SIGNALS_TOKEN
 
@@ -158,7 +159,7 @@ async function analyzeBehavioralSignals(audioPath) {
 
   try {
     const audioBuffer = fs.readFileSync(audioPath)
-    const filename = path.basename(audioPath)
+    const filename = originalFilename || path.basename(audioPath)
     const fileSize = audioBuffer.length
 
     const ext = path.extname(filename).toLowerCase()
@@ -265,36 +266,53 @@ function parseBehavioralResults(results) {
   const speakingRateCounts = {}
   const genderCounts = {}
   const languageCounts = {}
-  const ageSamples = []
+  const ageCounts = {}
+  const speakerCounts = {}
   let hesitationCount = 0
+  let utteranceCount = 0
   const asrParts = []
 
-  for (const utterance of results) {
-    const get = (field) => utterance[field]?.finalLabel || utterance[field]?.label || null
+  for (const entry of results) {
+    if (entry.level !== 'utterance') continue
+    const label = entry.finalLabel
+    if (!label) continue
 
-    const emotion = get('emotion')
-    const positivity = get('positivity')
-    const strength = get('strength')
-    const engagement = get('engagement')
-    const speakingRate = get('speaking_rate')
-    const hesitation = get('hesitation')
-    const asr = typeof utterance.asr === 'string'
-      ? utterance.asr
-      : (utterance.asr?.finalLabel || utterance.asr?.label || null)
-    const gender = get('gender')
-    const language = get('language')
-    const age = get('age')
-
-    if (emotion) emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1
-    if (positivity) positivityCounts[positivity] = (positivityCounts[positivity] || 0) + 1
-    if (strength) strengthCounts[strength] = (strengthCounts[strength] || 0) + 1
-    if (engagement) engagementCounts[engagement] = (engagementCounts[engagement] || 0) + 1
-    if (speakingRate) speakingRateCounts[speakingRate] = (speakingRateCounts[speakingRate] || 0) + 1
-    if (hesitation === 'yes') hesitationCount++
-    if (asr) asrParts.push(asr)
-    if (gender) genderCounts[gender] = (genderCounts[gender] || 0) + 1
-    if (language) languageCounts[language] = (languageCounts[language] || 0) + 1
-    if (age) ageSamples.push(age)
+    switch (entry.task) {
+      case 'asr':
+        asrParts.push(label.trim())
+        utteranceCount++
+        break
+      case 'emotion':
+        emotionCounts[label] = (emotionCounts[label] || 0) + 1
+        break
+      case 'positivity':
+        positivityCounts[label] = (positivityCounts[label] || 0) + 1
+        break
+      case 'strength':
+        strengthCounts[label] = (strengthCounts[label] || 0) + 1
+        break
+      case 'engagement':
+        engagementCounts[label] = (engagementCounts[label] || 0) + 1
+        break
+      case 'speaking_rate':
+        speakingRateCounts[label] = (speakingRateCounts[label] || 0) + 1
+        break
+      case 'hesitation':
+        if (label === 'yes') hesitationCount++
+        break
+      case 'gender':
+        genderCounts[label] = (genderCounts[label] || 0) + 1
+        break
+      case 'language':
+        languageCounts[label] = (languageCounts[label] || 0) + 1
+        break
+      case 'age':
+        ageCounts[label] = (ageCounts[label] || 0) + 1
+        break
+      case 'diarization':
+        speakerCounts[label] = (speakerCounts[label] || 0) + 1
+        break
+    }
   }
 
   const dominant = (counts) =>
@@ -309,10 +327,8 @@ function parseBehavioralResults(results) {
   const detectedLanguage = dominant(languageCounts)
   const hesitationDetected = hesitationCount > 0
   const asrTranscription = asrParts.join(' ').trim()
-
-  const estimatedAge = ageSamples.length > 0
-    ? Math.round(ageSamples.reduce((a, b) => parseFloat(a) + parseFloat(b), 0) / ageSamples.length)
-    : null
+  const estimatedAge = dominant(ageCounts)
+  const dominantSpeaker = dominant(speakerCounts)
 
   const summary = [
     dominantEmotion ? `Dominant emotion: ${dominantEmotion}` : null,
@@ -334,6 +350,7 @@ function parseBehavioralResults(results) {
     detectedGender,
     detectedLanguage,
     estimatedAge,
+    dominantSpeaker,
     summary
   }
 }
@@ -348,15 +365,21 @@ async function generatePrimaryEmotion(deepgramTranscript, behavioral, spaceHisto
 Deepgram Transcription: "${deepgramTranscript}"${bsTranscript}
 
 Voice Behavioral Analysis:
-- ${behavioral.summary}
+- Dominant Emotion: ${behavioral.dominantEmotion || 'unknown'}
+- Sentiment: ${behavioral.dominantPositivity || 'unknown'}
+- Vocal Strength / Arousal: ${behavioral.dominantArousal || 'unknown'}
+- Speaking Rate: ${behavioral.dominantSpeakingRate || 'unknown'}
+- Hesitation Detected: ${behavioral.hesitationDetected ? 'Yes' : 'No'}
+- Speaker Gender: ${behavioral.detectedGender || 'unknown'}
+- Estimated Age Range: ${behavioral.estimatedAge || 'unknown'}
+- Detected Language: ${behavioral.detectedLanguage || 'unknown'}
 
 ${spaceHistory.length > 0 ? `Previous analyses of this person:\n${spaceHistory.map((h, i) => `${i + 1}. ${h.primary_emotion}`).join('\n')}` : ''}
 
 Instructions:
 - Write ONLY 2-3 sentences
 - Focus on what emotion the person was FEELING while speaking
-- Use the voice behavioral data (emotion, positivity, arousal, engagement) as primary evidence
-- If the two transcriptions differ, use the most contextually accurate reading
+- Use the voice behavioral data as primary evidence
 - Be specific and clear
 - DO NOT use percentages or confidence scores
 - DO NOT mention "transcription" or "voice data"
@@ -390,11 +413,13 @@ Deepgram Transcription: "${deepgramTranscript}"${bsTranscript}
 
 Voice Behavioral Analysis:
 - Dominant Emotion: ${behavioral.dominantEmotion || 'unknown'}
-- Emotional Tone: ${behavioral.dominantPositivity || 'unknown'}
-- Energy/Arousal Level: ${behavioral.dominantArousal || 'unknown'}
-- Engagement Level: ${behavioral.dominantEngagement || 'unknown'}
+- Sentiment: ${behavioral.dominantPositivity || 'unknown'}
+- Vocal Strength / Arousal: ${behavioral.dominantArousal || 'unknown'}
 - Speaking Rate: ${behavioral.dominantSpeakingRate || 'unknown'}
 - Hesitation in speech: ${behavioral.hesitationDetected ? 'Yes' : 'No'}
+- Speaker Gender: ${behavioral.detectedGender || 'unknown'}
+- Estimated Age Range: ${behavioral.estimatedAge || 'unknown'}
+- Detected Language: ${behavioral.detectedLanguage || 'unknown'}
 
 Primary Emotion: ${primaryEmotion}
 
@@ -445,18 +470,32 @@ export const chatWithAI = async (req, res) => {
 
     const chatHistory = analysis.chat_history ? JSON.parse(analysis.chat_history) : []
 
+    const beh = analysis.hume_emotions || {}
+    const voiceProfile = [
+      beh.dominantEmotion    ? `Emotion: ${beh.dominantEmotion}` : null,
+      beh.dominantPositivity ? `Sentiment: ${beh.dominantPositivity}` : null,
+      beh.dominantArousal    ? `Vocal Strength: ${beh.dominantArousal}` : null,
+      beh.dominantSpeakingRate ? `Speaking Rate: ${beh.dominantSpeakingRate}` : null,
+      beh.hesitationDetected !== undefined ? `Hesitation: ${beh.hesitationDetected ? 'Yes' : 'No'}` : null,
+      beh.detectedGender     ? `Gender: ${beh.detectedGender}` : null,
+      beh.estimatedAge       ? `Age Range: ${beh.estimatedAge}` : null,
+      beh.detectedLanguage   ? `Language: ${beh.detectedLanguage}` : null,
+      beh.dominantSpeaker    ? `Speaker: ${beh.dominantSpeaker}` : null,
+    ].filter(Boolean).join('\n')
+
     const contextPrompt = `You are an expert emotion analyst. The user is asking about this emotion analysis:
 
 Transcription: "${analysis.transcription}"
 Primary Emotion: ${analysis.primary_emotion}
 Detailed Analysis: ${analysis.detailed_analysis}
+${voiceProfile ? `\nVoice Profile:\n${voiceProfile}` : ''}
 
 Previous conversation:
 ${chatHistory.map(m => `${m.role}: ${m.content}`).join('\n')}
 
 User question: ${message}
 
-Provide a helpful, insightful answer based on the analysis.`
+Provide a helpful, insightful answer based on the analysis and voice profile data.`
 
     const groq = getGroqClient()
     const completion = await groq.chat.completions.create({

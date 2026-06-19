@@ -68,10 +68,12 @@ Click **"Advanced"** → **"Environment Variables"** and add these:
 ```bash
 NODE_ENV=production
 PORT=3000
+DATABASE_URL=<your-supabase-postgres-connection-string>
 JWT_SECRET=<generate-a-secure-random-string>
 DEEPGRAM_API_KEY=<your-deepgram-api-key>
-HUME_API_KEY=<your-hume-api-key>
 GROQ_API_KEY=<your-groq-api-key>
+BEHAVIORAL_SIGNALS_CID=<your-behavioral-signals-client-id>
+BEHAVIORAL_SIGNALS_TOKEN=<your-behavioral-signals-api-token>
 ```
 
 ### How to Generate JWT_SECRET:
