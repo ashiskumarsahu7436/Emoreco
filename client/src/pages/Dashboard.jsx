@@ -20,6 +20,7 @@ function Dashboard() {
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const fileInputRef = useRef(null)
+  const mimeTypeRef = useRef('audio/webm')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -57,11 +58,20 @@ function Dashboard() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaRecorderRef.current = new MediaRecorder(stream)
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4',
+      ]
+      const supportedMime = preferredTypes.find(t => MediaRecorder.isTypeSupported(t)) || ''
+      mimeTypeRef.current = supportedMime || 'audio/webm'
+      mediaRecorderRef.current = new MediaRecorder(stream, supportedMime ? { mimeType: supportedMime } : {})
       audioChunksRef.current = []
       mediaRecorderRef.current.ondataavailable = (e) => audioChunksRef.current.push(e.data)
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        const blob = new Blob(audioChunksRef.current, { type: mimeTypeRef.current })
         setAudioFile(blob)
       }
       mediaRecorderRef.current.start()
@@ -94,8 +104,10 @@ function Dashboard() {
     if (!audioFile) return
     setLoading(true)
     try {
+      const mime = mimeTypeRef.current || 'audio/webm'
+      const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
       const formData = new FormData()
-      formData.append('audio', audioFile)
+      formData.append('audio', audioFile, `recording.${ext}`)
       formData.append('sourceType', 'mic')
       if (selectedSpace) formData.append('spaceId', selectedSpace)
       const token = localStorage.getItem('token')
