@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import './Settings.css'
 
 const NAV_ITEMS = [
@@ -51,6 +52,18 @@ export default function Settings() {
     saveRecordings: false,
   })
 
+  const [privacy, setPrivacy] = useState({
+    storeEmbeddings: true,
+    analyticsOptIn: false,
+    retainAudio: false,
+  })
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwStatus, setPwStatus] = useState(null)
+  const [pwLoading, setPwLoading] = useState(false)
+  const [speakerCount, setSpeakerCount] = useState(null)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [clearLoading, setClearLoading] = useState(false)
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) { navigate('/login'); return }
@@ -60,6 +73,84 @@ export default function Settings() {
     setFirstName(parts[0] || '')
     setLastName(parts.slice(1).join(' ') || '')
   }, [navigate])
+
+  useEffect(() => {
+    if (activeTab !== 'privacy') return
+    const token = localStorage.getItem('token')
+    axios.get('/api/speakers', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setSpeakerCount(r.data.length))
+      .catch(() => setSpeakerCount(0))
+  }, [activeTab])
+
+  const handleChangePassword = async () => {
+    if (!pwForm.current || !pwForm.next || !pwForm.confirm) {
+      setPwStatus({ type: 'error', msg: 'All fields are required.' }); return
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setPwStatus({ type: 'error', msg: 'New passwords do not match.' }); return
+    }
+    if (pwForm.next.length < 8) {
+      setPwStatus({ type: 'error', msg: 'Password must be at least 8 characters.' }); return
+    }
+    setPwLoading(true); setPwStatus(null)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.post('/api/auth/change-password',
+        { currentPassword: pwForm.current, newPassword: pwForm.next },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setPwStatus({ type: 'success', msg: 'Password updated successfully.' })
+      setPwForm({ current: '', next: '', confirm: '' })
+    } catch (err) {
+      setPwStatus({ type: 'error', msg: err.response?.data?.error || 'Failed to update password.' })
+    } finally {
+      setPwLoading(false)
+    }
+  }
+
+  const handleExportData = async () => {
+    setExportLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const [analysesRes, spacesRes, speakersRes] = await Promise.all([
+        axios.get('/api/analyses', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/spaces', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/speakers', { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        user: { name: user.name, email: user.email },
+        analyses: analysesRes.data,
+        spaces: spacesRes.data,
+        speakerProfiles: speakersRes.data,
+      }
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `emoreco-export-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Export failed. Please try again.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleClearAnalyses = async () => {
+    if (!confirm('Delete all your analyses? This cannot be undone.')) return
+    setClearLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete('/api/analyses', { headers: { Authorization: `Bearer ${token}` } })
+      alert('All analyses deleted.')
+    } catch {
+      alert('Failed to clear analyses.')
+    } finally {
+      setClearLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -257,7 +348,212 @@ export default function Settings() {
             </>
           )}
 
-          {activeTab !== 'profile' && (
+          {activeTab === 'privacy' && (
+            <>
+              {/* Password & Authentication */}
+              <div className="settings-section">
+                <div className="ssection-header">
+                  <h2>Password & Authentication</h2>
+                  <p>Change your password to keep your account secure.</p>
+                </div>
+                <div className="sform-grid">
+                  <div className="sform-field" style={{ gridColumn: '1 / -1' }}>
+                    <label>Current password</label>
+                    <input
+                      type="password"
+                      placeholder="Enter current password"
+                      value={pwForm.current}
+                      onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))}
+                    />
+                  </div>
+                  <div className="sform-field">
+                    <label>New password</label>
+                    <input
+                      type="password"
+                      placeholder="Min. 8 characters"
+                      value={pwForm.next}
+                      onChange={e => setPwForm(p => ({ ...p, next: e.target.value }))}
+                    />
+                  </div>
+                  <div className="sform-field">
+                    <label>Confirm new password</label>
+                    <input
+                      type="password"
+                      placeholder="Repeat new password"
+                      value={pwForm.confirm}
+                      onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {pwStatus && (
+                  <div className={`pw-status ${pwStatus.type}`}>
+                    {pwStatus.type === 'success'
+                      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    }
+                    {pwStatus.msg}
+                  </div>
+                )}
+
+                <div className="pw-actions">
+                  <button className="pw-save-btn" onClick={handleChangePassword} disabled={pwLoading}>
+                    {pwLoading
+                      ? <><span className="btn-spinner" /> Updating…</>
+                      : <>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          Update Password
+                        </>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              {/* Privacy Controls */}
+              <div className="settings-section">
+                <div className="ssection-header">
+                  <h2>Privacy Controls</h2>
+                  <p>Choose how your voice data is stored and used.</p>
+                </div>
+                <div className="sprefs-list">
+                  <div className="spref-row">
+                    <div className="spref-icon blue">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    </div>
+                    <div className="spref-text">
+                      <span className="spref-title">Store voice embeddings for speaker recognition</span>
+                      <span className="spref-desc">Enables auto-matching of future recordings to speaker profiles.</span>
+                    </div>
+                    <Toggle checked={privacy.storeEmbeddings} onChange={v => setPrivacy(p => ({ ...p, storeEmbeddings: v }))} />
+                  </div>
+                  <div className="spref-row">
+                    <div className="spref-icon indigo">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                    </div>
+                    <div className="spref-text">
+                      <span className="spref-title">Retain processed audio on server</span>
+                      <span className="spref-desc">Audio files are deleted immediately after analysis by default.</span>
+                    </div>
+                    <Toggle checked={privacy.retainAudio} onChange={v => setPrivacy(p => ({ ...p, retainAudio: v }))} />
+                  </div>
+                  <div className="spref-row">
+                    <div className="spref-icon slate">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    </div>
+                    <div className="spref-text">
+                      <span className="spref-title">Anonymous usage analytics</span>
+                      <span className="spref-desc">Help improve EMORECO by sharing anonymised usage patterns.</span>
+                    </div>
+                    <Toggle checked={privacy.analyticsOptIn} onChange={v => setPrivacy(p => ({ ...p, analyticsOptIn: v }))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Voice & Speaker Data */}
+              <div className="settings-section">
+                <div className="ssection-header">
+                  <h2>Voice & Speaker Data</h2>
+                  <p>Manage the speaker profiles and voice fingerprints stored for your account.</p>
+                </div>
+                <div className="sec-info-grid">
+                  <div className="sec-info-card">
+                    <div className="sec-info-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    </div>
+                    <div className="sec-info-text">
+                      <span className="sec-info-val">{speakerCount ?? '—'}</span>
+                      <span className="sec-info-label">Speaker profiles</span>
+                    </div>
+                  </div>
+                  <div className="sec-info-card">
+                    <div className="sec-info-icon green">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <div className="sec-info-text">
+                      <span className="sec-info-val">AES-256</span>
+                      <span className="sec-info-label">Encryption at rest</span>
+                    </div>
+                  </div>
+                  <div className="sec-info-card">
+                    <div className="sec-info-icon purple">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <div className="sec-info-text">
+                      <span className="sec-info-val">TLS 1.3</span>
+                      <span className="sec-info-label">Encryption in transit</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="sec-action-row">
+                  <div className="sec-action-text">
+                    <span className="sec-action-title">Speaker voice profiles</span>
+                    <span className="sec-action-desc">Voice fingerprints are used only for auto-matching within your account and are never shared.</span>
+                  </div>
+                  <button className="sec-ghost-btn" onClick={() => navigate('/settings')}>
+                    Manage Profiles
+                  </button>
+                </div>
+              </div>
+
+              {/* Data Management */}
+              <div className="settings-section">
+                <div className="ssection-header">
+                  <h2>Your Data</h2>
+                  <p>Export or erase the data EMORECO holds about you.</p>
+                </div>
+                <div className="data-action-list">
+                  <div className="data-action-row">
+                    <div className="data-action-left">
+                      <div className="data-action-icon blue">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      </div>
+                      <div className="data-action-text">
+                        <span className="data-action-title">Export my data</span>
+                        <span className="data-action-desc">Download a JSON file with all your analyses, spaces, and speaker profiles.</span>
+                      </div>
+                    </div>
+                    <button className="sec-ghost-btn" onClick={handleExportData} disabled={exportLoading}>
+                      {exportLoading ? <><span className="btn-spinner" /> Exporting…</> : 'Export JSON'}
+                    </button>
+                  </div>
+
+                  <div className="data-action-row">
+                    <div className="data-action-left">
+                      <div className="data-action-icon amber">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      </div>
+                      <div className="data-action-text">
+                        <span className="data-action-title">Clear all analyses</span>
+                        <span className="data-action-desc">Permanently delete all voice analyses from your account. Spaces are kept.</span>
+                      </div>
+                    </div>
+                    <button className="sec-danger-ghost-btn" onClick={handleClearAnalyses} disabled={clearLoading}>
+                      {clearLoading ? <><span className="btn-spinner" /> Clearing…</> : 'Clear Analyses'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Danger Zone */}
+              <div className="settings-section danger-zone">
+                <div className="ssection-header">
+                  <h2 className="danger-title">Danger Zone</h2>
+                  <p>Permanently delete your account and all associated data.</p>
+                </div>
+                <div className="danger-row">
+                  <span className="danger-warning">Once deleted, your account cannot be recovered.</span>
+                  <button className="delete-account-btn" onClick={handleDeleteAccount}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                    </svg>
+                    Delete Account
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab !== 'profile' && activeTab !== 'privacy' && (
             <div className="settings-placeholder">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 1 0 4.93 19.07 10 10 0 0 0 19.07 4.93z"/>

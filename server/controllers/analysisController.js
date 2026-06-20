@@ -7,6 +7,18 @@ import axios from 'axios'
 import PDFDocument from 'pdfkit'
 import { getOne, getAll, run } from '../config/database.js'
 
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB)
+  return denom === 0 ? 0 : dot / denom
+}
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -60,16 +72,42 @@ export const analyzeAudio = async (req, res) => {
       console.error('Behavioral Signals error:', behavioralResult.reason)
     }
 
+    let autoMatchedSpaceId = null
+    let autoMatchedProfileName = null
+    if (behavioral.speakerEmbedding) {
+      try {
+        const profiles = await getAll(
+          'SELECT * FROM speaker_profiles WHERE user_id = ? AND embedding IS NOT NULL',
+          [req.user.userId]
+        )
+        for (const profile of profiles) {
+          const storedEmb = JSON.parse(profile.embedding)
+          const similarity = cosineSimilarity(behavioral.speakerEmbedding, storedEmb)
+          console.log(`  → Similarity with "${profile.display_name}": ${similarity.toFixed(4)}`)
+          if (similarity > 0.85 && profile.space_id) {
+            autoMatchedSpaceId = profile.space_id
+            autoMatchedProfileName = profile.display_name
+            console.log(`  → Auto-matched to "${profile.display_name}" (space ${profile.space_id})`)
+            break
+          }
+        }
+      } catch (matchErr) {
+        console.warn('Speaker auto-match error:', matchErr.message)
+      }
+    }
+
+    const finalSpaceId = spaceId || autoMatchedSpaceId || null
+
     console.log('Step 3: Getting space history...')
     let spaceHistory = []
-    if (spaceId) {
+    if (finalSpaceId) {
       spaceHistory = await getAll(`
         SELECT transcription, primary_emotion, detailed_analysis
         FROM analyses
         WHERE space_id = ?
         ORDER BY created_at DESC
         LIMIT 5
-      `, [spaceId])
+      `, [finalSpaceId])
     }
 
     console.log('Step 4: Generating Primary Emotion analysis...')
@@ -94,7 +132,7 @@ export const analyzeAudio = async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       req.user.userId,
-      spaceId || null,
+      finalSpaceId,
       storedAudioPath,
       transcription.text,
       transcription.language || 'en',
@@ -111,7 +149,9 @@ export const analyzeAudio = async (req, res) => {
       analysisId: result.lastInsertRowid,
       transcription: transcription.text,
       primaryEmotion,
-      detailedAnalysis
+      detailedAnalysis,
+      autoMatchedProfile: autoMatchedProfileName || null,
+      autoMatchedSpaceId: autoMatchedSpaceId || null
     })
 
   } catch (err) {
@@ -173,7 +213,7 @@ async function analyzeBehavioralSignals(audioPath, originalFilename) {
     const form = new FormData()
     form.append('file', blob, filename)
     form.append('name', 'emoreco-analysis')
-    form.append('embeddings', 'false')
+    form.append('embeddings', 'true')
 
     console.log(`  → Submitting audio to Behavioral Signals: ${filename} (${fileSize} bytes, ${mimeType})`)
     const submitRes = await fetch(
@@ -245,8 +285,12 @@ async function analyzeBehavioralSignals(audioPath, originalFilename) {
       throw new Error(`Behavioral Signals results fetch failed: ${resultsRes.status}`)
     }
 
-    const results = await resultsRes.json()
-    return parseBehavioralResults(results)
+    const rawResults = await resultsRes.json()
+    console.log('  → Behavioral Signals raw response type:', Array.isArray(rawResults) ? 'array' : typeof rawResults)
+    if (!Array.isArray(rawResults)) {
+      console.log('  → Behavioral Signals response keys:', Object.keys(rawResults))
+    }
+    return parseBehavioralResults(rawResults)
 
   } catch (err) {
     console.error('Behavioral Signals error:', err.message)
@@ -254,10 +298,23 @@ async function analyzeBehavioralSignals(audioPath, originalFilename) {
   }
 }
 
-function parseBehavioralResults(results) {
+function parseBehavioralResults(rawResults) {
+  // Handle both raw array and wrapped response formats e.g. { data: [...] } or { results: [...] }
+  let results = rawResults
+  if (rawResults && !Array.isArray(rawResults)) {
+    results = rawResults.data || rawResults.results || rawResults.predictions
+      || rawResults.output || Object.values(rawResults).find(v => Array.isArray(v)) || []
+    console.log('  → Unwrapped Behavioral Signals results, length:', results.length)
+  }
+
   if (!results || !Array.isArray(results) || results.length === 0) {
+    console.warn('  → parseBehavioralResults: no usable array found in response')
     return { summary: 'No behavioral data returned', asrTranscription: '' }
   }
+
+  console.log(`  → Parsing ${results.length} result entries`)
+  const tasksSeen = [...new Set(results.map(e => e.task))]
+  console.log('  → Tasks in results:', tasksSeen)
 
   const emotionCounts = {}
   const positivityCounts = {}
@@ -268,6 +325,7 @@ function parseBehavioralResults(results) {
   const languageCounts = {}
   const ageCounts = {}
   const speakerCounts = {}
+  const diarizationEmbeddings = {}
   let hesitationCount = 0
   let utteranceCount = 0
   const asrParts = []
@@ -311,6 +369,10 @@ function parseBehavioralResults(results) {
         break
       case 'diarization':
         speakerCounts[label] = (speakerCounts[label] || 0) + 1
+        if (entry.embedding && Array.isArray(entry.embedding)) {
+          if (!diarizationEmbeddings[label]) diarizationEmbeddings[label] = []
+          diarizationEmbeddings[label].push(entry.embedding)
+        }
         break
     }
   }
@@ -329,6 +391,18 @@ function parseBehavioralResults(results) {
   const asrTranscription = asrParts.join(' ').trim()
   const estimatedAge = dominant(ageCounts)
   const dominantSpeaker = dominant(speakerCounts)
+
+  let speakerEmbedding = null
+  const dominantSpeakerEmbeddings = dominantSpeaker && diarizationEmbeddings[dominantSpeaker]
+  if (dominantSpeakerEmbeddings && dominantSpeakerEmbeddings.length > 0) {
+    const len = dominantSpeakerEmbeddings[0].length
+    const avg = new Array(len).fill(0)
+    for (const emb of dominantSpeakerEmbeddings) {
+      for (let i = 0; i < len; i++) avg[i] += emb[i]
+    }
+    speakerEmbedding = avg.map(v => v / dominantSpeakerEmbeddings.length)
+    console.log(`  → Speaker embedding computed from ${dominantSpeakerEmbeddings.length} utterances (dim: ${len})`)
+  }
 
   const summary = [
     dominantEmotion ? `Dominant emotion: ${dominantEmotion}` : null,
@@ -351,6 +425,7 @@ function parseBehavioralResults(results) {
     detectedLanguage,
     estimatedAge,
     dominantSpeaker,
+    speakerEmbedding,
     summary
   }
 }
@@ -470,7 +545,9 @@ export const chatWithAI = async (req, res) => {
 
     const chatHistory = analysis.chat_history ? JSON.parse(analysis.chat_history) : []
 
-    const beh = analysis.hume_emotions || {}
+    const beh = analysis.hume_emotions
+      ? (typeof analysis.hume_emotions === 'string' ? JSON.parse(analysis.hume_emotions) : analysis.hume_emotions)
+      : {}
     const voiceProfile = [
       beh.dominantEmotion    ? `Emotion: ${beh.dominantEmotion}` : null,
       beh.dominantPositivity ? `Sentiment: ${beh.dominantPositivity}` : null,
@@ -538,36 +615,182 @@ export const generatePDF = async (req, res) => {
       return res.status(404).json({ error: 'Analysis not found' })
     }
 
-    const doc = new PDFDocument({ margin: 50 })
+    let beh = {}
+    if (analysis.hume_emotions) {
+      try {
+        beh = typeof analysis.hume_emotions === 'string'
+          ? JSON.parse(analysis.hume_emotions)
+          : analysis.hume_emotions
+      } catch {}
+    }
 
+    const stripThinking = (text) => {
+      if (!text) return ''
+      return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+    }
+
+    const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
+
+    const LANG_MAP = {
+      en:'English', hi:'Hindi', ta:'Tamil', te:'Telugu', mr:'Marathi',
+      bn:'Bengali', gu:'Gujarati', kn:'Kannada', ml:'Malayalam', pa:'Punjabi',
+      ur:'Urdu', fr:'French', de:'German', es:'Spanish', zh:'Chinese', ja:'Japanese',
+    }
+    const EMOTION_COLOR  = { angry:'#ef4444', happy:'#22c55e', heavy:'#a78bfa', sad:'#60a5fa', neutral:'#71717a' }
+    const POSITIVITY_COLOR = { positive:'#22c55e', neutral:'#71717a', negative:'#ef4444' }
+    const AROUSAL_COLOR  = { strong:'#f59e0b', neutral:'#60a5fa', weak:'#6b7280' }
+    const RATE_COLOR     = { fast:'#ef4444', normal:'#22c55e', slow:'#60a5fa' }
+
+    const domEmotion    = beh.dominantEmotion?.toLowerCase()
+    const domPositivity = beh.dominantPositivity?.toLowerCase()
+    const domArousal    = beh.dominantArousal?.toLowerCase()
+    const domRate       = beh.dominantSpeakingRate?.toLowerCase()
+    const detLang       = beh.detectedLanguage?.toLowerCase() || analysis.language?.toLowerCase()
+
+    const arousalLabel = domArousal === 'strong' ? 'Strong' : domArousal === 'neutral' ? 'Moderate' : domArousal === 'weak' ? 'Weak' : '—'
+    const hesitationColor = beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? '#f59e0b' : '#22c55e') : '#71717a'
+
+    const PAGE_W   = 612
+    const PAGE_H   = 792
+    const MARGIN   = 44
+    const CONTENT_W = PAGE_W - MARGIN * 2
+
+    const doc = new PDFDocument({ margin: MARGIN, size: 'letter', autoFirstPage: true })
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename=emotion-analysis-${id}.pdf`)
-
     doc.pipe(res)
 
-    doc.fontSize(24).fillColor('#6C63FF').text('EMORECO', { align: 'center' })
-    doc.fontSize(16).fillColor('#36D1DC').text('Emotion Analysis Report', { align: 'center' })
-    doc.moveDown()
-
-    doc.fontSize(10).fillColor('black').text(`Date: ${new Date(analysis.created_at).toLocaleString()}`)
-    if (analysis.space_name) {
-      doc.text(`Space: ${analysis.space_name}`)
+    const drawPageFooter = () => {
+      doc.rect(0, PAGE_H - 30, PAGE_W, 30).fill('#0f0f10')
+      doc.font('Helvetica').fontSize(7.5).fillColor('#52525b')
+        .text(
+          `EMORECO · Voice-Based AI Emotion Recognition · Report #${id} · Confidential`,
+          0, PAGE_H - 19, { align: 'center', width: PAGE_W }
+        )
     }
-    doc.moveDown()
 
-    doc.fontSize(14).fillColor('#6C63FF').text('Transcription:')
-    doc.fontSize(11).fillColor('black').text(analysis.transcription, { align: 'justify' })
-    doc.moveDown()
+    doc.on('pageAdded', () => {
+      doc.rect(0, 0, PAGE_W, 8).fill('#3b82f6')
+      drawPageFooter()
+    })
 
-    doc.fontSize(14).fillColor('#6C63FF').text('Primary Emotion:')
-    doc.fontSize(11).fillColor('black').text(analysis.primary_emotion, { align: 'justify' })
-    doc.moveDown()
+    // ── HEADER BAND ──────────────────────────────────────────────
+    doc.rect(0, 0, PAGE_W, 120).fill('#0f0f10')
+    doc.rect(0, 116, PAGE_W, 4).fill('#3b82f6')
+    doc.rect(0, PAGE_H - 30, PAGE_W, 30).fill('#0f0f10')
 
-    doc.fontSize(14).fillColor('#6C63FF').text('Detailed Analysis:')
-    doc.fontSize(11).fillColor('black').text(analysis.detailed_analysis, { align: 'justify' })
-    doc.moveDown()
+    // Brand name
+    doc.font('Helvetica-Bold').fontSize(30).fillColor('#3b82f6').text('EMORECO', MARGIN, 22, { lineBreak: false })
+    // Subtitle
+    doc.font('Helvetica').fontSize(10).fillColor('#a1a1aa').text('Voice Emotion Analysis Report', MARGIN, 60, { lineBreak: false })
+    // Date line
+    const dateStr = new Date(analysis.created_at).toLocaleString([], {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    })
+    doc.font('Helvetica').fontSize(8.5).fillColor('#52525b').text(`Generated: ${dateStr}`, MARGIN, 78, { lineBreak: false })
+    if (analysis.space_name) {
+      doc.text(`  ·  Space: ${analysis.space_name}`, { lineBreak: false, continued: true })
+    }
 
-    doc.fontSize(8).fillColor('gray').text('Generated by EMORECO - Voice-Based AI Emotion Recognition', { align: 'center' })
+    // Report ID badge (top-right)
+    doc.roundedRect(PAGE_W - MARGIN - 80, 28, 80, 20, 4).fill('#1e3a5f')
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#93c5fd').text(`Report #${id}`, PAGE_W - MARGIN - 76, 36, { lineBreak: false, width: 72, align: 'center' })
+
+    // Footer on first page
+    drawPageFooter()
+
+    doc.y = 134
+    doc.x = MARGIN
+
+    // ── VOICE ANALYSIS GRID ──────────────────────────────────────
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#3b82f6')
+      .text('VOICE ANALYSIS', MARGIN, doc.y, { characterSpacing: 0.8 })
+    doc.moveDown(0.5)
+
+    const metrics = [
+      { label: 'Dominant Emotion',  value: cap(domEmotion),    color: EMOTION_COLOR[domEmotion]  || '#71717a' },
+      { label: 'Sentiment',         value: cap(domPositivity), color: POSITIVITY_COLOR[domPositivity] || '#71717a' },
+      { label: 'Vocal Strength',    value: arousalLabel,       color: AROUSAL_COLOR[domArousal]  || '#71717a' },
+      { label: 'Speaking Rate',     value: cap(domRate),       color: RATE_COLOR[domRate]         || '#71717a' },
+      { label: 'Hesitation',        value: beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? 'Detected' : 'None') : '—', color: hesitationColor },
+      { label: 'Language',          value: LANG_MAP[detLang]  || (detLang ? detLang.toUpperCase() : '—'), color: '#60a5fa' },
+      { label: 'Gender',            value: cap(beh.detectedGender), color: '#a78bfa' },
+      { label: 'Age Range',         value: beh.estimatedAge   || '—', color: '#fb923c' },
+      { label: 'Speaker ID',        value: beh.dominantSpeaker || '—', color: '#94a3b8' },
+    ]
+
+    const GAP     = 8
+    const COLS    = 3
+    const CARD_W  = (CONTENT_W - GAP * (COLS - 1)) / COLS
+    const CARD_H  = 52
+    const gridY   = doc.y
+
+    metrics.forEach((m, i) => {
+      const col = i % COLS
+      const row = Math.floor(i / COLS)
+      const x   = MARGIN + col * (CARD_W + GAP)
+      const y   = gridY + row * (CARD_H + GAP)
+
+      doc.roundedRect(x, y, CARD_W, CARD_H, 5).fill('#1a1a1d')
+      doc.rect(x, y, 3, CARD_H).fill(m.color)
+
+      doc.font('Helvetica').fontSize(7.5).fillColor('#71717a')
+        .text(m.label, x + 10, y + 10, { width: CARD_W - 14, lineBreak: false })
+
+      doc.font('Helvetica-Bold').fontSize(12).fillColor(m.color)
+        .text(m.value, x + 10, y + 24, { width: CARD_W - 14, lineBreak: false })
+    })
+
+    const totalRows = Math.ceil(metrics.length / COLS)
+    doc.y = gridY + totalRows * (CARD_H + GAP) + 6
+    doc.x = MARGIN
+
+    // ── DIVIDER ──────────────────────────────────────────────────
+    doc.rect(MARGIN, doc.y, CONTENT_W, 1).fill('#27272a')
+    doc.y += 14
+    doc.x = MARGIN
+
+    // ── SECTION HELPER ────────────────────────────────────────────
+    const drawSection = (title, body, accentColor, bgColor) => {
+      if (!body || !body.trim()) return
+
+      const HEADER_H = 26
+      const bodyText = body.trim()
+      const charsPerLine = Math.floor(CONTENT_W / 6)
+      const estimatedLines = Math.ceil(bodyText.length / charsPerLine) + 2
+      const estimatedH = HEADER_H + 8 + estimatedLines * 14 + 24
+
+      if (doc.y + estimatedH > PAGE_H - 40) {
+        doc.addPage()
+        doc.y = MARGIN + 16
+        doc.x = MARGIN
+      }
+
+      const sy = doc.y
+      doc.roundedRect(MARGIN, sy, CONTENT_W, HEADER_H, 4).fill(bgColor || '#18181b')
+      doc.rect(MARGIN, sy, 3, HEADER_H).fill(accentColor)
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(accentColor)
+        .text(title, MARGIN + 12, sy + 9, { characterSpacing: 0.6, lineBreak: false })
+
+      doc.y = sy + HEADER_H + 8
+      doc.x = MARGIN
+
+      doc.font('Helvetica').fontSize(10).fillColor('#c4c4c7')
+        .text(bodyText, MARGIN, doc.y, { align: 'justify', width: CONTENT_W, lineGap: 2.5 })
+
+      doc.moveDown(1)
+    }
+
+    // ── TRANSCRIPTION ─────────────────────────────────────────────
+    const langNote = LANG_MAP[detLang] || (detLang ? detLang.toUpperCase() : '')
+    drawSection(`TRANSCRIPTION${langNote ? '  ·  ' + langNote : ''}`, analysis.transcription, '#3b82f6', '#0f1929')
+
+    // ── PRIMARY EMOTION ───────────────────────────────────────────
+    drawSection('PRIMARY EMOTION', stripThinking(analysis.primary_emotion), '#22c55e', '#0f1a13')
+
+    // ── DETAILED ANALYSIS ─────────────────────────────────────────
+    drawSection('DETAILED ANALYSIS', stripThinking(analysis.detailed_analysis), '#a78bfa', '#14111f')
 
     doc.end()
 

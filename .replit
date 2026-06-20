@@ -31,7 +31,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && npm install && node index.js"
+args = "cd server && node index.js"
 waitForPort = 3000
 
 [[workflows.workflow]]
@@ -43,7 +43,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd client && npm install && npm run dev"
+args = "cd client && npm run dev"
 waitForPort = 5000
 
 [[ports]]
@@ -66,3 +66,5 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
+NODE_ENV = "development"
+PORT = "3000"
