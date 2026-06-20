@@ -66,4 +66,3 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-JWT_SECRET = "c7cd0a8c6372d310fbf8741ec365e0d158b83c4ef96196e48e14a1813ecd2093e3bbbb013019292ef2c1a42142fd425f0c562f3c566dc4df75a03c6e5419885a"

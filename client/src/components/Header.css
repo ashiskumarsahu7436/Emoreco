@@ -114,13 +114,13 @@
   gap: 8px;
 }
 
-.header-bell {
+.header-theme-btn {
   width: 34px;
   height: 34px;
   border-radius: 8px;
   background: transparent;
   border: 1px solid var(--border);
-  color: #71717a;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -128,10 +128,14 @@
   transition: all 0.2s;
 }
 
-.header-bell:hover {
-  color: #e4e4e7;
-  border-color: #3f3f46;
-  background: rgba(255,255,255,0.05);
+.header-theme-btn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: rgba(128,128,128,0.08);
+}
+
+.header-theme-btn--standalone {
+  margin-right: 2px;
 }
 
 .header-avatar {

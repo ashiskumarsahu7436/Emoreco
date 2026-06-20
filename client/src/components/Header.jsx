@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { AudioWaveform } from 'lucide-react'
+import { AudioWaveform, Sun, Moon } from 'lucide-react'
 import './Header.css'
 
 function Header() {
@@ -8,6 +8,20 @@ function Header() {
   const location = useLocation()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userInitials, setUserInitials] = useState('JD')
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    return saved ? saved === 'dark' : true
+  })
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+      localStorage.setItem('theme', isDark ? 'dark' : 'light')
+    } else {
+      // Always force dark on public pages (landing, login, signup)
+      document.documentElement.setAttribute('data-theme', 'dark')
+    }
+  }, [isDark, isLoggedIn])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -55,11 +69,16 @@ function Header() {
       <div className="auth-buttons">
         {isLoggedIn ? (
           <div className="header-user-area">
-            <button className="header-bell" aria-label="Notifications">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
+            <button
+              className="header-theme-btn"
+              aria-label="Toggle theme"
+              onClick={() => setIsDark(v => !v)}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDark
+                ? <Sun size={16} />
+                : <Moon size={16} />
+              }
             </button>
             <Link to="/settings" className={`header-avatar ${location.pathname === '/settings' ? 'active' : ''}`} title="Settings">
               {userInitials}
