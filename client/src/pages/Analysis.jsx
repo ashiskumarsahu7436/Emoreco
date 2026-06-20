@@ -22,6 +22,8 @@ import {
   PauseCircle,
 } from 'lucide-react'
 import './Analysis.css'
+import ThinkingBlock from '../components/ThinkingBlock'
+import { parseAIResponse } from '../utils/parseAIResponse'
 
 function Analysis() {
   const { id } = useParams()
@@ -159,13 +161,12 @@ function Analysis() {
   const genderLabel = beh.detectedGender
     ? beh.detectedGender.charAt(0).toUpperCase() + beh.detectedGender.slice(1)
     : null
-  const genderEmoji = beh.detectedGender?.toLowerCase() === 'female' ? '👩' : beh.detectedGender?.toLowerCase() === 'male' ? '👨' : null
-
-  const hasBSData = beh.dominantEmotion || beh.dominantPositivity || beh.dominantArousal ||
-                    beh.dominantSpeakingRate || beh.detectedGender || beh.estimatedAge ||
-                    beh.detectedLanguage || beh.dominantSpeaker || beh.hesitationDetected !== undefined
+  const genderEmoji = beh.detectedGender?.toLowerCase() === 'female' ? '👩'
+    : beh.detectedGender?.toLowerCase() === 'male' ? '👨' : null
 
   const fmt = (d) => new Date(d).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+
+  const NA = <span className="an-sb-na">—</span>
 
   return (
     <div className="an-page">
@@ -218,7 +219,15 @@ function Analysis() {
                 </div>
               </div>
               <div className="an-text-box">
-                <p className="an-body-text">{analysis.primary_emotion}</p>
+                {(() => {
+                  const { thinking, answer } = parseAIResponse(analysis.primary_emotion)
+                  return (
+                    <>
+                      {thinking && <ThinkingBlock thinking={thinking} />}
+                      <p className="an-body-text">{answer}</p>
+                    </>
+                  )
+                })()}
               </div>
             </section>
 
@@ -242,7 +251,15 @@ function Analysis() {
               {showDetailedAnalysis && (
                 <div className="an-expand-body">
                   <div className="an-text-box">
-                    <p className="an-body-text an-body-spaced">{analysis.detailed_analysis}</p>
+                    {(() => {
+                      const { thinking, answer } = parseAIResponse(analysis.detailed_analysis)
+                      return (
+                        <>
+                          {thinking && <ThinkingBlock thinking={thinking} />}
+                          <p className="an-body-text an-body-spaced">{answer}</p>
+                        </>
+                      )
+                    })()}
                   </div>
                 </div>
               )}
@@ -274,16 +291,27 @@ function Analysis() {
                         <p>Ask anything about this analysis</p>
                       </div>
                     ) : (
-                      messages.map((msg, i) => (
-                        <div key={i} className={`an-msg an-msg-${msg.role}`}>
-                          {msg.role === 'assistant' && (
-                            <div className="an-msg-avatar">
-                              <Brain size={14} color="#60a5fa" />
+                      messages.map((msg, i) => {
+                        if (msg.role === 'assistant') {
+                          const { thinking, answer } = parseAIResponse(msg.content)
+                          return (
+                            <div key={i} className="an-msg an-msg-assistant">
+                              <div className="an-msg-avatar">
+                                <Brain size={14} color="#60a5fa" />
+                              </div>
+                              <div className="an-msg-bubble">
+                                {thinking && <ThinkingBlock thinking={thinking} />}
+                                {answer}
+                              </div>
                             </div>
-                          )}
-                          <div className="an-msg-bubble">{msg.content}</div>
-                        </div>
-                      ))
+                          )
+                        }
+                        return (
+                          <div key={i} className="an-msg an-msg-user">
+                            <div className="an-msg-bubble">{msg.content}</div>
+                          </div>
+                        )
+                      })
                     )}
                     <div ref={chatEndRef} />
                   </div>
@@ -308,138 +336,122 @@ function Analysis() {
 
           </div>
 
-          {/* ── RIGHT: Voice Analysis Sidebar ── */}
-          {hasBSData && (
-            <aside className="an-sidebar">
-              <div className="an-sb-header">
-                <div className="an-sb-icon">
-                  <Activity size={15} color="#60a5fa" />
+          {/* ── RIGHT: Voice Analysis Sidebar — always visible ── */}
+          <aside className="an-sidebar">
+            <div className="an-sb-header">
+              <div className="an-sb-icon">
+                <Activity size={15} color="#60a5fa" />
+              </div>
+              <div>
+                <h3 className="an-sb-title">Voice Analysis</h3>
+                <p className="an-sb-sub">Behavioral Signals API</p>
+              </div>
+            </div>
+
+            <div className="an-sb-section-label">Speaker</div>
+            <div className="an-sb-rows">
+
+              <div className="an-sb-row">
+                <div className="an-sb-label"><Globe size={12} />Language</div>
+                <span className="an-sb-val">{displayLang || NA}</span>
+              </div>
+
+              <div className="an-sb-row">
+                <div className="an-sb-label"><User size={12} />Gender</div>
+                <span className="an-sb-val">
+                  {genderLabel ? (<>{genderEmoji && <span className="an-sb-emoji">{genderEmoji}</span>}{genderLabel}</>) : NA}
+                </span>
+              </div>
+
+              <div className="an-sb-row">
+                <div className="an-sb-label"><Calendar size={12} />Age Range</div>
+                <span className="an-sb-val">{beh.estimatedAge || NA}</span>
+              </div>
+
+              {beh.dominantSpeaker && (
+                <div className="an-sb-row">
+                  <div className="an-sb-label"><Mic size={12} />Speaker ID</div>
+                  <span className="an-sb-val an-sb-mono">{beh.dominantSpeaker}</span>
                 </div>
-                <div>
-                  <h3 className="an-sb-title">Voice Analysis</h3>
-                  <p className="an-sb-sub">Behavioral Signals</p>
+              )}
+
+            </div>
+
+            <div className="an-sb-section-label">Emotion</div>
+            <div className="an-sb-rows">
+
+              <div className="an-sb-row">
+                <div className="an-sb-label">
+                  <span className="an-sb-dot" style={{ background: emotion?.color || '#3f3f46' }} />
+                  Emotion
+                </div>
+                <span className="an-sb-val" style={{ color: emotion?.color }}>
+                  {emotion ? (<><span className="an-sb-emoji">{emotion.emoji}</span>{emotion.label}</>) : NA}
+                </span>
+              </div>
+
+              <div className="an-sb-row">
+                <div className="an-sb-label">
+                  <span className="an-sb-dot" style={{ background: positivity?.color || '#3f3f46' }} />
+                  Sentiment
+                </div>
+                <span className="an-sb-val" style={{ color: positivity?.color }}>
+                  {positivity ? (<><span className="an-sb-emoji">{positivity.emoji}</span>{positivity.label}</>) : NA}
+                </span>
+              </div>
+
+            </div>
+
+            <div className="an-sb-section-label">Vocal Patterns</div>
+            <div className="an-sb-rows">
+
+              <div className="an-sb-row an-sb-row-col">
+                <div className="an-sb-row-inner">
+                  <div className="an-sb-label"><Zap size={12} />Vocal Strength</div>
+                  <span className="an-sb-val" style={{ color: arousal?.color }}>
+                    {arousal ? arousal.label : NA}
+                  </span>
+                </div>
+                <div className="an-sb-bar-track">
+                  <div
+                    className="an-sb-bar-fill"
+                    style={{
+                      width: arousal ? `${arousal.pct}%` : '0%',
+                      background: arousal?.color || '#3f3f46'
+                    }}
+                  />
                 </div>
               </div>
 
-              <div className="an-sb-rows">
-
-                {displayLang && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <Globe size={12} color="#52525b" />
-                      Language
-                    </div>
-                    <span className="an-sb-val">{displayLang}</span>
-                  </div>
-                )}
-
-                {beh.dominantSpeaker && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <Mic size={12} color="#52525b" />
-                      Speaker
-                    </div>
-                    <span className="an-sb-val an-sb-mono">{beh.dominantSpeaker}</span>
-                  </div>
-                )}
-
-                {genderLabel && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <User size={12} color="#52525b" />
-                      Gender
-                    </div>
-                    <span className="an-sb-val">
-                      {genderEmoji && <span className="an-sb-emoji">{genderEmoji}</span>}
-                      {genderLabel}
-                    </span>
-                  </div>
-                )}
-
-                {beh.estimatedAge && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <Calendar size={12} color="#52525b" />
-                      Age Range
-                    </div>
-                    <span className="an-sb-val">{beh.estimatedAge}</span>
-                  </div>
-                )}
-
-                {emotion && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <span className="an-sb-dot" style={{ background: emotion.color }} />
-                      Emotion
-                    </div>
-                    <span className="an-sb-val" style={{ color: emotion.color }}>
-                      <span className="an-sb-emoji">{emotion.emoji}</span>
-                      {emotion.label}
-                    </span>
-                  </div>
-                )}
-
-                {positivity && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <span className="an-sb-dot" style={{ background: positivity.color }} />
-                      Sentiment
-                    </div>
-                    <span className="an-sb-val" style={{ color: positivity.color }}>
-                      <span className="an-sb-emoji">{positivity.emoji}</span>
-                      {positivity.label}
-                    </span>
-                  </div>
-                )}
-
-                {arousal && (
-                  <div className="an-sb-row an-sb-row-col">
-                    <div className="an-sb-row-inner">
-                      <div className="an-sb-label">
-                        <Zap size={12} color="#52525b" />
-                        Vocal Strength
-                      </div>
-                      <span className="an-sb-val" style={{ color: arousal.color }}>{arousal.label}</span>
-                    </div>
-                    <div className="an-sb-bar-track">
-                      <div className="an-sb-bar-fill" style={{ width: `${arousal.pct}%`, background: arousal.color }} />
-                    </div>
-                  </div>
-                )}
-
-                {rate && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <TrendingUp size={12} color="#52525b" />
-                      Speaking Rate
-                    </div>
-                    <span className="an-sb-val" style={{ color: rate.color }}>
-                      <span className="an-sb-emoji">{rate.emoji}</span>
-                      {rate.label}
-                    </span>
-                  </div>
-                )}
-
-                {beh.hesitationDetected !== undefined && (
-                  <div className="an-sb-row">
-                    <div className="an-sb-label">
-                      <PauseCircle size={12} color="#52525b" />
-                      Hesitation
-                    </div>
-                    <span className="an-sb-val" style={{ color: beh.hesitationDetected ? '#f59e0b' : '#22c55e' }}>
-                      <span className="an-sb-emoji">{beh.hesitationDetected ? '⏸️' : '▶️'}</span>
-                      {beh.hesitationDetected ? 'Detected' : 'None'}
-                    </span>
-                  </div>
-                )}
-
+              <div className="an-sb-row">
+                <div className="an-sb-label"><TrendingUp size={12} />Speaking Rate</div>
+                <span className="an-sb-val" style={{ color: rate?.color }}>
+                  {rate ? (<><span className="an-sb-emoji">{rate.emoji}</span>{rate.label}</>) : NA}
+                </span>
               </div>
 
-              <div className="an-sb-footer">
-                Powered by Behavioral Signals v5
+              <div className="an-sb-row">
+                <div className="an-sb-label"><PauseCircle size={12} />Hesitation</div>
+                <span
+                  className="an-sb-val"
+                  style={{
+                    color: beh.hesitationDetected !== undefined
+                      ? (beh.hesitationDetected ? '#f59e0b' : '#22c55e')
+                      : undefined
+                  }}
+                >
+                  {beh.hesitationDetected !== undefined
+                    ? (<><span className="an-sb-emoji">{beh.hesitationDetected ? '⏸️' : '▶️'}</span>{beh.hesitationDetected ? 'Detected' : 'None'}</>)
+                    : NA}
+                </span>
               </div>
-            </aside>
-          )}
+
+            </div>
+
+            <div className="an-sb-footer">
+              Powered by Behavioral Signals v5
+            </div>
+          </aside>
 
         </div>
       </div>
