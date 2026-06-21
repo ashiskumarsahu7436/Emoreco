@@ -24,6 +24,7 @@ import {
 import './Analysis.css'
 import ThinkingBlock from '../components/ThinkingBlock'
 import { parseAIResponse } from '../utils/parseAIResponse'
+import SpeakerPopup from '../components/SpeakerPopup'
 
 function Analysis() {
   const { id } = useParams()
@@ -35,6 +36,8 @@ function Analysis() {
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [showSpeakerPopup, setShowSpeakerPopup] = useState(false)
+  const [speakerDisplayName, setSpeakerDisplayName] = useState(null)
   const chatEndRef = useRef(null)
 
   useEffect(() => {
@@ -369,9 +372,16 @@ function Analysis() {
               </div>
 
               {beh.dominantSpeaker && (
-                <div className="an-sb-row">
+                <div
+                  className="an-sb-row an-sb-row-clickable"
+                  onClick={() => setShowSpeakerPopup(true)}
+                  title="Click to rename or create a speaker profile"
+                >
                   <div className="an-sb-label"><Mic size={12} />Speaker ID</div>
-                  <span className="an-sb-val an-sb-mono">{beh.dominantSpeaker}</span>
+                  <span className="an-sb-val an-sb-mono an-sb-speaker-chip">
+                    {speakerDisplayName || beh.dominantSpeaker}
+                    <span className="an-sb-edit-hint">✎</span>
+                  </span>
                 </div>
               )}
 
@@ -455,6 +465,15 @@ function Analysis() {
 
         </div>
       </div>
+
+      {showSpeakerPopup && beh.dominantSpeaker && (
+        <SpeakerPopup
+          analysisId={parseInt(id)}
+          speakerLabel={beh.dominantSpeaker}
+          onClose={() => setShowSpeakerPopup(false)}
+          onSaved={({ displayName }) => setSpeakerDisplayName(displayName)}
+        />
+      )}
     </div>
   )
 }

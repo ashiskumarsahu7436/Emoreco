@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import authRoutes from './routes/auth.js'
 import spacesRoutes from './routes/spaces.js'
 import analysesRoutes from './routes/analyses.js'
+import speakersRoutes from './routes/speakers.js'
 import { initDb } from './config/database.js'
 
 dotenv.config()
@@ -28,6 +29,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 app.use('/api/auth', authRoutes)
 app.use('/api/spaces', spacesRoutes)
 app.use('/api/analyses', analysesRoutes)
+app.use('/api/speakers', speakersRoutes)
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'EMORECO API is running' })

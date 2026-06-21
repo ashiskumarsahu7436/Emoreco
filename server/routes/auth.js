@@ -74,4 +74,41 @@ router.post('/login', async (req, res) => {
   }
 })
 
+router.post('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(' ')[1]
+    if (!token) return res.status(401).json({ error: 'Access token required' })
+
+    let payload
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET)
+    } catch {
+      return res.status(403).json({ error: 'Invalid or expired token' })
+    }
+
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Both current and new password are required' })
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' })
+    }
+
+    const user = await getOne('SELECT * FROM users WHERE id = ?', [payload.userId])
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const valid = await bcrypt.compare(currentPassword, user.password)
+    if (!valid) return res.status(401).json({ error: 'Current password is incorrect' })
+
+    const hashed = await bcrypt.hash(newPassword, 10)
+    await run('UPDATE users SET password = ? WHERE id = ?', [hashed, payload.userId])
+
+    res.json({ message: 'Password updated successfully' })
+  } catch (err) {
+    console.error('Change password error:', err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 export default router

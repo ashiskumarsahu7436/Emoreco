@@ -41,9 +41,20 @@ export async function initDb() {
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS speaker_profiles (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      space_id INTEGER REFERENCES spaces(id) ON DELETE SET NULL,
+      embedding TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_user_id ON analyses(user_id)`)
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_analyses_space_id ON analyses(space_id)`)
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_spaces_user_id ON spaces(user_id)`)
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_speaker_profiles_user_id ON speaker_profiles(user_id)`)
 }
 
 export function query(text, params) {
