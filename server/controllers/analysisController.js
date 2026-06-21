@@ -624,9 +624,18 @@ export const generatePDF = async (req, res) => {
       } catch {}
     }
 
-    const stripThinking = (text) => {
+    const stripAI = (text) => {
       if (!text) return ''
-      return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+      return text
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+        .trim()
+    }
+
+    const safe = (text, maxLen) => {
+      const s = stripAI(text || '')
+      if (!s) return ''
+      return s.length <= maxLen ? s : s.slice(0, maxLen) + '\n\n[See full analysis in app]'
     }
 
     const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
@@ -636,161 +645,173 @@ export const generatePDF = async (req, res) => {
       bn:'Bengali', gu:'Gujarati', kn:'Kannada', ml:'Malayalam', pa:'Punjabi',
       ur:'Urdu', fr:'French', de:'German', es:'Spanish', zh:'Chinese', ja:'Japanese',
     }
-    const EMOTION_COLOR  = { angry:'#ef4444', happy:'#22c55e', heavy:'#a78bfa', sad:'#60a5fa', neutral:'#71717a' }
-    const POSITIVITY_COLOR = { positive:'#22c55e', neutral:'#71717a', negative:'#ef4444' }
-    const AROUSAL_COLOR  = { strong:'#f59e0b', neutral:'#60a5fa', weak:'#6b7280' }
-    const RATE_COLOR     = { fast:'#ef4444', normal:'#22c55e', slow:'#60a5fa' }
 
     const domEmotion    = beh.dominantEmotion?.toLowerCase()
     const domPositivity = beh.dominantPositivity?.toLowerCase()
     const domArousal    = beh.dominantArousal?.toLowerCase()
     const domRate       = beh.dominantSpeakingRate?.toLowerCase()
     const detLang       = beh.detectedLanguage?.toLowerCase() || analysis.language?.toLowerCase()
+    const langLabel     = LANG_MAP[detLang] || (detLang ? detLang.toUpperCase() : '—')
+    const arousalLabel  = domArousal === 'strong' ? 'Strong' : domArousal === 'neutral' ? 'Moderate' : domArousal === 'weak' ? 'Weak' : '—'
 
-    const arousalLabel = domArousal === 'strong' ? 'Strong' : domArousal === 'neutral' ? 'Moderate' : domArousal === 'weak' ? 'Weak' : '—'
-    const hesitationColor = beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? '#f59e0b' : '#22c55e') : '#71717a'
+    const metrics = [
+      { label: 'Dominant Emotion', value: cap(domEmotion) },
+      { label: 'Sentiment',        value: cap(domPositivity) },
+      { label: 'Vocal Strength',   value: arousalLabel },
+      { label: 'Speaking Rate',    value: cap(domRate) },
+      { label: 'Hesitation',       value: beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? 'Detected' : 'None') : '—' },
+      { label: 'Language',         value: langLabel },
+      { label: 'Gender',           value: cap(beh.detectedGender) },
+      { label: 'Age Range',        value: beh.estimatedAge || '—' },
+      { label: 'Speaker ID',       value: beh.dominantSpeaker || '—' },
+    ]
 
-    const PAGE_W   = 612
-    const PAGE_H   = 792
-    const MARGIN   = 44
+    // Font paths
+    const __dir = path.dirname(fileURLToPath(import.meta.url))
+    const FONT_REG  = path.join(__dir, '../fonts/NotoSans-Regular.ttf')
+    const FONT_BOLD = path.join(__dir, '../fonts/NotoSans-Bold.ttf')
+    const hasNoto   = fs.existsSync(FONT_REG) && fs.existsSync(FONT_BOLD)
+
+    const PAGE_W    = 612
+    const PAGE_H    = 792
+    const MARGIN    = 48
     const CONTENT_W = PAGE_W - MARGIN * 2
 
-    const doc = new PDFDocument({ margin: MARGIN, size: 'letter', autoFirstPage: true })
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename=emotion-analysis-${id}.pdf`)
-    doc.pipe(res)
+    // Colors — clean light theme
+    const C_BRAND   = '#1d4ed8'   // blue
+    const C_HEADING = '#111827'   // near-black
+    const C_BODY    = '#374151'   // dark gray
+    const C_LABEL   = '#6b7280'   // medium gray
+    const C_RULE    = '#e5e7eb'   // light rule
+    const C_ACCENT  = '#dbeafe'   // light blue bg for section header
 
-    const drawPageFooter = () => {
-      doc.rect(0, PAGE_H - 30, PAGE_W, 30).fill('#0f0f10')
-      doc.font('Helvetica').fontSize(7.5).fillColor('#52525b')
-        .text(
-          `EMORECO · Voice-Based AI Emotion Recognition · Report #${id} · Confidential`,
-          0, PAGE_H - 19, { align: 'center', width: PAGE_W }
-        )
+    const doc = new PDFDocument({ margin: MARGIN, size: 'letter', autoFirstPage: true })
+
+    if (hasNoto) {
+      doc.registerFont('Regular', FONT_REG)
+      doc.registerFont('Bold',    FONT_BOLD)
+    } else {
+      doc.registerFont('Regular', 'Helvetica')
+      doc.registerFont('Bold',    'Helvetica-Bold')
     }
 
-    doc.on('pageAdded', () => {
-      doc.rect(0, 0, PAGE_W, 8).fill('#3b82f6')
-      drawPageFooter()
+    const chunks = []
+    doc.on('data', chunk => chunks.push(chunk))
+    doc.on('end', () => {
+      const buf = Buffer.concat(chunks)
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', `attachment; filename=emotion-analysis-${id}.pdf`)
+      res.end(buf)
+    })
+    doc.on('error', err => {
+      console.error('PDF error:', err)
+      if (!res.headersSent) res.status(500).json({ error: 'PDF generation failed' })
     })
 
-    // ── HEADER BAND ──────────────────────────────────────────────
-    doc.rect(0, 0, PAGE_W, 120).fill('#0f0f10')
-    doc.rect(0, 116, PAGE_W, 4).fill('#3b82f6')
-    doc.rect(0, PAGE_H - 30, PAGE_W, 30).fill('#0f0f10')
+    // ── TOP ACCENT BAR ────────────────────────────────────────────
+    doc.rect(0, 0, PAGE_W, 5).fill(C_BRAND)
 
-    // Brand name
-    doc.font('Helvetica-Bold').fontSize(30).fillColor('#3b82f6').text('EMORECO', MARGIN, 22, { lineBreak: false })
-    // Subtitle
-    doc.font('Helvetica').fontSize(10).fillColor('#a1a1aa').text('Voice Emotion Analysis Report', MARGIN, 60, { lineBreak: false })
-    // Date line
+    // ── HEADER ────────────────────────────────────────────────────
+    const TOP = 24
+    doc.font('Bold').fontSize(26).fillColor(C_BRAND)
+      .text('EMORECO', MARGIN, TOP, { lineBreak: false })
+
+    // Report number — right-aligned
+    doc.font('Regular').fontSize(9).fillColor(C_LABEL)
+      .text(`Report #${id}`, MARGIN, TOP + 6, { align: 'right', width: CONTENT_W, lineBreak: false })
+
+    doc.font('Regular').fontSize(11).fillColor(C_HEADING)
+      .text('Voice Emotion Analysis Report', MARGIN, TOP + 34, { lineBreak: false })
+
     const dateStr = new Date(analysis.created_at).toLocaleString([], {
       weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
     })
-    doc.font('Helvetica').fontSize(8.5).fillColor('#52525b').text(`Generated: ${dateStr}`, MARGIN, 78, { lineBreak: false })
-    if (analysis.space_name) {
-      doc.text(`  ·  Space: ${analysis.space_name}`, { lineBreak: false, continued: true })
-    }
+    doc.font('Regular').fontSize(9).fillColor(C_LABEL)
+      .text(`Generated: ${dateStr}${analysis.space_name ? '   ·   Space: ' + analysis.space_name : ''}`,
+            MARGIN, TOP + 52, { lineBreak: false })
 
-    // Report ID badge (top-right)
-    doc.roundedRect(PAGE_W - MARGIN - 80, 28, 80, 20, 4).fill('#1e3a5f')
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#93c5fd').text(`Report #${id}`, PAGE_W - MARGIN - 76, 36, { lineBreak: false, width: 72, align: 'center' })
+    // Header rule
+    doc.rect(MARGIN, TOP + 70, CONTENT_W, 1).fill(C_RULE)
 
-    // Footer on first page
-    drawPageFooter()
-
-    doc.y = 134
+    doc.y = TOP + 84
     doc.x = MARGIN
 
-    // ── VOICE ANALYSIS GRID ──────────────────────────────────────
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#3b82f6')
-      .text('VOICE ANALYSIS', MARGIN, doc.y, { characterSpacing: 0.8 })
-    doc.moveDown(0.5)
+    // ── VOICE ANALYSIS SECTION ────────────────────────────────────
+    doc.font('Bold').fontSize(9).fillColor(C_BRAND)
+      .text('VOICE ANALYSIS', MARGIN, doc.y, { characterSpacing: 1 })
+    doc.y += 14
+    doc.x = MARGIN
 
-    const metrics = [
-      { label: 'Dominant Emotion',  value: cap(domEmotion),    color: EMOTION_COLOR[domEmotion]  || '#71717a' },
-      { label: 'Sentiment',         value: cap(domPositivity), color: POSITIVITY_COLOR[domPositivity] || '#71717a' },
-      { label: 'Vocal Strength',    value: arousalLabel,       color: AROUSAL_COLOR[domArousal]  || '#71717a' },
-      { label: 'Speaking Rate',     value: cap(domRate),       color: RATE_COLOR[domRate]         || '#71717a' },
-      { label: 'Hesitation',        value: beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? 'Detected' : 'None') : '—', color: hesitationColor },
-      { label: 'Language',          value: LANG_MAP[detLang]  || (detLang ? detLang.toUpperCase() : '—'), color: '#60a5fa' },
-      { label: 'Gender',            value: cap(beh.detectedGender), color: '#a78bfa' },
-      { label: 'Age Range',         value: beh.estimatedAge   || '—', color: '#fb923c' },
-      { label: 'Speaker ID',        value: beh.dominantSpeaker || '—', color: '#94a3b8' },
-    ]
-
-    const GAP     = 8
-    const COLS    = 3
-    const CARD_W  = (CONTENT_W - GAP * (COLS - 1)) / COLS
-    const CARD_H  = 52
-    const gridY   = doc.y
+    // Grid — 3 columns, values bold, labels small gray
+    const COLS   = 3
+    const COL_W  = CONTENT_W / COLS
+    const ROW_H  = 38
+    const gridY  = doc.y
 
     metrics.forEach((m, i) => {
       const col = i % COLS
       const row = Math.floor(i / COLS)
-      const x   = MARGIN + col * (CARD_W + GAP)
-      const y   = gridY + row * (CARD_H + GAP)
+      const x   = MARGIN + col * COL_W
+      const y   = gridY + row * ROW_H
 
-      doc.roundedRect(x, y, CARD_W, CARD_H, 5).fill('#1a1a1d')
-      doc.rect(x, y, 3, CARD_H).fill(m.color)
-
-      doc.font('Helvetica').fontSize(7.5).fillColor('#71717a')
-        .text(m.label, x + 10, y + 10, { width: CARD_W - 14, lineBreak: false })
-
-      doc.font('Helvetica-Bold').fontSize(12).fillColor(m.color)
-        .text(m.value, x + 10, y + 24, { width: CARD_W - 14, lineBreak: false })
+      // Label
+      doc.font('Regular').fontSize(8).fillColor(C_LABEL)
+        .text(m.label, x + 6, y, { width: COL_W - 10, lineBreak: false })
+      // Value
+      doc.font('Bold').fontSize(12).fillColor(C_HEADING)
+        .text(m.value, x + 6, y + 11, { width: COL_W - 10, lineBreak: false })
     })
 
     const totalRows = Math.ceil(metrics.length / COLS)
-    doc.y = gridY + totalRows * (CARD_H + GAP) + 6
+    doc.y = gridY + totalRows * ROW_H + 8
     doc.x = MARGIN
 
-    // ── DIVIDER ──────────────────────────────────────────────────
-    doc.rect(MARGIN, doc.y, CONTENT_W, 1).fill('#27272a')
-    doc.y += 14
+    // Rule after grid
+    doc.rect(MARGIN, doc.y, CONTENT_W, 1).fill(C_RULE)
+    doc.y += 16
     doc.x = MARGIN
 
     // ── SECTION HELPER ────────────────────────────────────────────
-    const drawSection = (title, body, accentColor, bgColor) => {
+    const drawSection = (title, body) => {
       if (!body || !body.trim()) return
-
-      const HEADER_H = 26
       const bodyText = body.trim()
-      const charsPerLine = Math.floor(CONTENT_W / 6)
-      const estimatedLines = Math.ceil(bodyText.length / charsPerLine) + 2
-      const estimatedH = HEADER_H + 8 + estimatedLines * 14 + 24
 
-      if (doc.y + estimatedH > PAGE_H - 40) {
+      // Estimate if we need a page break before the header
+      if (doc.y + 60 > PAGE_H - MARGIN) {
         doc.addPage()
-        doc.y = MARGIN + 16
+        doc.y = MARGIN + 10
         doc.x = MARGIN
       }
 
+      // Section header row with light blue background
       const sy = doc.y
-      doc.roundedRect(MARGIN, sy, CONTENT_W, HEADER_H, 4).fill(bgColor || '#18181b')
-      doc.rect(MARGIN, sy, 3, HEADER_H).fill(accentColor)
-      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(accentColor)
-        .text(title, MARGIN + 12, sy + 9, { characterSpacing: 0.6, lineBreak: false })
+      doc.rect(MARGIN, sy, CONTENT_W, 22).fill(C_ACCENT)
+      doc.rect(MARGIN, sy, 3, 22).fill(C_BRAND)
+      doc.font('Bold').fontSize(8.5).fillColor(C_BRAND)
+        .text(title, MARGIN + 10, sy + 7, { lineBreak: false })
 
-      doc.y = sy + HEADER_H + 8
+      doc.y = sy + 30
       doc.x = MARGIN
 
-      doc.font('Helvetica').fontSize(10).fillColor('#c4c4c7')
-        .text(bodyText, MARGIN, doc.y, { align: 'justify', width: CONTENT_W, lineGap: 2.5 })
+      doc.font('Regular').fontSize(10).fillColor(C_BODY)
+        .text(bodyText, MARGIN, doc.y, { align: 'justify', width: CONTENT_W, lineGap: 3 })
 
-      doc.moveDown(1)
+      doc.y += 18
+      doc.x = MARGIN
     }
 
-    // ── TRANSCRIPTION ─────────────────────────────────────────────
-    const langNote = LANG_MAP[detLang] || (detLang ? detLang.toUpperCase() : '')
-    drawSection(`TRANSCRIPTION${langNote ? '  ·  ' + langNote : ''}`, analysis.transcription, '#3b82f6', '#0f1929')
+    // ── CONTENT SECTIONS ─────────────────────────────────────────
+    const langNote = langLabel !== '—' ? `  ·  ${langLabel}` : ''
+    drawSection(`TRANSCRIPTION${langNote}`, safe(analysis.transcription, 3000))
+    drawSection('PRIMARY EMOTION', safe(analysis.primary_emotion, 3000))
+    drawSection('DETAILED ANALYSIS', safe(analysis.detailed_analysis, 6000))
 
-    // ── PRIMARY EMOTION ───────────────────────────────────────────
-    drawSection('PRIMARY EMOTION', stripThinking(analysis.primary_emotion), '#22c55e', '#0f1a13')
-
-    // ── DETAILED ANALYSIS ─────────────────────────────────────────
-    drawSection('DETAILED ANALYSIS', stripThinking(analysis.detailed_analysis), '#a78bfa', '#14111f')
+    // ── FOOTER ───────────────────────────────────────────────────
+    doc.rect(MARGIN, doc.y, CONTENT_W, 1).fill(C_RULE)
+    doc.font('Regular').fontSize(8).fillColor(C_LABEL)
+      .text('Generated by EMORECO · Voice-Based AI Emotion Recognition · Confidential',
+            MARGIN, doc.y + 6, { align: 'center', width: CONTENT_W, lineBreak: false })
 
     doc.end()
 
