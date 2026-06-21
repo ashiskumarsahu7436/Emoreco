@@ -38,6 +38,7 @@ function Analysis() {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [showSpeakerPopup, setShowSpeakerPopup] = useState(false)
   const [speakerDisplayName, setSpeakerDisplayName] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const chatEndRef = useRef(null)
 
   useEffect(() => {
@@ -90,21 +91,119 @@ function Analysis() {
   }
 
   const downloadPDF = async () => {
+    setPdfLoading(true)
     try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get(`/api/analyses/${id}/pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob'
+      const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ])
+
+      const beh = analysis.hume_emotions || {}
+      const LANG_MAP = {
+        en:'English', hi:'Hindi', ta:'Tamil', te:'Telugu', mr:'Marathi',
+        bn:'Bengali', gu:'Gujarati', kn:'Kannada', ml:'Malayalam', pa:'Punjabi',
+        ur:'Urdu', fr:'French', de:'German', es:'Spanish', zh:'Chinese', ja:'Japanese',
+      }
+      const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
+      const detLang = beh.detectedLanguage?.toLowerCase() || analysis.language?.toLowerCase()
+      const langLabel = LANG_MAP[detLang] || (detLang ? detLang.toUpperCase() : '—')
+      const arousalLabel = { strong:'Strong', neutral:'Moderate', weak:'Weak' }[beh.dominantArousal?.toLowerCase()] || '—'
+      const dateStr = new Date(analysis.created_at).toLocaleString([], {
+        weekday:'short', year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
       })
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `emotion-analysis-${id}.pdf`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-    } catch {
-      alert('Failed to download PDF')
+
+      const metrics = [
+        ['Dominant Emotion', cap(beh.dominantEmotion)],
+        ['Sentiment',        cap(beh.dominantPositivity)],
+        ['Vocal Strength',   arousalLabel],
+        ['Speaking Rate',    cap(beh.dominantSpeakingRate)],
+        ['Hesitation',       beh.hesitationDetected !== undefined ? (beh.hesitationDetected ? 'Detected' : 'None') : '—'],
+        ['Language',         langLabel],
+        ['Gender',           cap(beh.detectedGender)],
+        ['Age Range',        beh.estimatedAge || '—'],
+        ['Speaker ID',       beh.dominantSpeaker || '—'],
+      ]
+
+      const gridRows = [metrics.slice(0,3), metrics.slice(3,6), metrics.slice(6,9)]
+      const gridHTML = gridRows.map(row => `
+        <tr>
+          ${row.map(([label]) => `<td style="font-size:9px;color:#6b7280;padding:0 6px 2px 6px;">${label}</td>`).join('')}
+        </tr>
+        <tr>
+          ${row.map(([,val]) => `<td style="font-size:13px;font-weight:700;color:#111827;padding:0 6px 14px 6px;">${val || '—'}</td>`).join('')}
+        </tr>
+      `).join('')
+
+      const clean = (text) => {
+        if (!text) return ''
+        const { answer } = parseAIResponse(text)
+        return (answer || '').trim()
+      }
+
+      const section = (title, body) => body ? `
+        <div style="margin-bottom:20px;">
+          <div style="background:#dbeafe;border-left:3px solid #1d4ed8;padding:6px 10px;margin-bottom:10px;">
+            <span style="font-size:9px;font-weight:700;color:#1d4ed8;letter-spacing:0.8px;">${title}</span>
+          </div>
+          <div style="font-size:10.5px;color:#374151;line-height:1.7;text-align:justify;padding:0 4px;">${body}</div>
+        </div>
+      ` : ''
+
+      const transcriptTitle = `TRANSCRIPTION${langLabel !== '—' ? '  ·  ' + langLabel : ''}`
+
+      const html = `
+        <div id="pdf-root" style="
+          width:794px;background:#fff;color:#111827;padding:48px 52px;
+          font-family:'Segoe UI',system-ui,Arial,sans-serif;box-sizing:border-box;
+        ">
+          <div style="border-top:5px solid #1d4ed8;padding-top:22px;display:flex;justify-content:space-between;align-items:flex-start;">
+            <span style="font-size:26px;font-weight:700;color:#1d4ed8;letter-spacing:-0.5px;">EMORECO</span>
+            <span style="font-size:9px;color:#6b7280;margin-top:6px;">Report #${id}</span>
+          </div>
+          <div style="font-size:12px;color:#111827;font-weight:600;margin:10px 0 3px;">Voice Emotion Analysis Report</div>
+          <div style="font-size:9px;color:#6b7280;margin-bottom:18px;">Generated: ${dateStr}${analysis.space_name ? '   ·   Space: ' + analysis.space_name : ''}</div>
+          <div style="height:1px;background:#e5e7eb;margin-bottom:18px;"></div>
+
+          <div style="font-size:9px;font-weight:700;color:#1d4ed8;letter-spacing:1px;margin-bottom:12px;">VOICE ANALYSIS</div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">${gridHTML}</table>
+          <div style="height:1px;background:#e5e7eb;margin-bottom:20px;"></div>
+
+          ${section(transcriptTitle, analysis.transcription || '')}
+          ${section('PRIMARY EMOTION', clean(analysis.primary_emotion))}
+          ${section('DETAILED ANALYSIS', clean(analysis.detailed_analysis))}
+
+          <div style="height:1px;background:#e5e7eb;margin-top:8px;margin-bottom:8px;"></div>
+          <div style="font-size:8px;color:#9ca3af;text-align:center;">Generated by EMORECO · Voice-Based AI Emotion Recognition · Confidential</div>
+        </div>
+      `
+
+      const container = document.createElement('div')
+      container.style.cssText = 'position:absolute;left:-9999px;top:0;'
+      container.innerHTML = html
+      document.body.appendChild(container)
+      const el = container.querySelector('#pdf-root')
+
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      document.body.removeChild(container)
+
+      const A4_W = 210, A4_H = 297
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const imgW = A4_W
+      const imgH = (canvas.height * A4_W) / canvas.width
+      let yOffset = 0
+
+      while (yOffset < imgH) {
+        if (yOffset > 0) pdf.addPage()
+        pdf.addImage(canvas, 'PNG', 0, -yOffset, imgW, imgH)
+        yOffset += A4_H
+      }
+
+      pdf.save(`emotion-analysis-${id}.pdf`)
+    } catch (err) {
+      console.error('PDF error:', err)
+      alert('Failed to generate PDF')
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -183,8 +282,11 @@ function Analysis() {
             </button>
             <span className="an-date">{fmt(analysis.created_at)}</span>
           </div>
-          <button className="an-download-btn" onClick={downloadPDF}>
-            <Download size={15} /> Export PDF
+          <button className="an-download-btn" onClick={downloadPDF} disabled={pdfLoading}>
+            {pdfLoading
+              ? <><Loader2 size={15} className="an-spin" /> Generating…</>
+              : <><Download size={15} /> Export PDF</>
+            }
           </button>
         </div>
 
